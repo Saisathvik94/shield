@@ -81,6 +81,8 @@ SHIELD
 - The application uses the Next.js App Router and Server Actions.
 - Uploaded files are sent to Server Actions as multipart form data. The configured Server Action body limit is `55mb`; the application validates each file at `50 MB`.
 - The database connection uses Neon PostgreSQL through `@neondatabase/serverless` and WebSockets.
+- Asset authorization is fail-closed and requires the deployed Algorand permission application; PostgreSQL `asset_access` rows are only a local index/cache.
+- The permission application is authored in Python with PyTeal under `contracts/permission_registry.py` and compiled to TEAL before deployment.
 - Development schema changes can be applied with `npm run db:push`.
 
 ---
@@ -236,6 +238,22 @@ Every critical operation creates an on-chain proof via the SHIELD treasury accou
 | Manual anchor | 0-ALGO self-payment | Any audit event on demand |
 
 All transactions use **AlgoNode free TestNet** - no API token or paid account needed. Transaction and ASA links use [Pera Explorer](https://explorer.perawallet.app), with testnet links under `https://testnet.explorer.perawallet.app`.
+
+#### On-chain permission registry
+
+SHIELD uses a shared Algorand stateful application with box storage for asset permissions. The application stores a deterministic box for each `(asset, wallet)` pair. A box exists when access is granted and is deleted when access is revoked. Asset list and passport reads query this application directly; they do not use the database grant row as the authorization decision.
+
+Deploy the registry before creating or granting access to assets:
+
+```bash
+python -m pip install -r contracts/requirements.txt
+python contracts/permission_registry.py
+npm run algorand:deploy-permission-app
+```
+
+The deployment command recompiles the Python contract, deploys the application, initializes the treasury as the contract administrator, funds the application account for box minimum balance, and prints the `ALGORAND_PERMISSION_APP_ID` value. Add that value to `.env.local` and restart the server.
+
+The current contract is a server-relayed registry controlled by the SHIELD treasury account. The next decentralization step would require admin wallets to sign application calls directly instead of relying on the server treasury.
 
 ### 12. Audit Trail
 
@@ -434,6 +452,7 @@ npm run db:studio     # Open Drizzle Studio UI
 | `ALGORAND_NODE_TOKEN` | Phase 5 | Node API token (empty for AlgoNode) |
 | `ALGORAND_INDEXER_URL` | Phase 5 | Indexer URL for read queries |
 | `ALGORAND_TREASURY_MNEMONIC` | Phase 5 | 25-word mnemonic for protocol account |
+| `ALGORAND_PERMISSION_APP_ID` | Required for asset access | Deployed shared permission registry application ID |
 
 ---
 

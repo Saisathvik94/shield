@@ -3,11 +3,16 @@
 import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { assets, assetAccess, organizationMemberships } from "@/db/schema";
+import { assets, assetAccess, organizationMemberships, walletIdentities } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { createAuditEvent } from "@/db/queries/audit";
 import { isAlgorandConfigured } from "@/lib/algorand/client";
 import { anchorAuditEvent } from "@/lib/algorand/audit-anchor";
+import {
+  isPermissionRegistryConfigured,
+  hasOnChainAssetAccess,
+  setOnChainAssetAccess,
+} from "@/lib/algorand/permission-registry";
 import type { NewAsset } from "@/db/schema";
 
 export type AssetActionResult =
@@ -58,6 +63,9 @@ export async function createAsset(
 
   const memberIds = [...new Set((data.memberIds ?? []).filter(Boolean))]
     .filter((id) => id !== userId);
+  if (!isPermissionRegistryConfigured()) {
+    return { status: "error", message: "On-chain permission registry is not deployed." };
+  }
   if (memberIds.length > 0) {
     const members = await db.query.organizationMemberships.findMany({
       where: and(
@@ -87,6 +95,30 @@ export async function createAsset(
       status: "REGISTERED",
     })
     .returning();
+
+  const accessUserIds = [userId, ...memberIds];
+  const wallets = await db.query.walletIdentities.findMany({
+    where: inArray(walletIdentities.userId, accessUserIds),
+  });
+  if (wallets.length !== accessUserIds.length) {
+    await db.delete(assets).where(eq(assets.id, asset.id));
+    return { status: "error", message: "Every asset member must have a linked wallet before access can be granted on-chain." };
+  }
+
+  try {
+    await Promise.all(
+      wallets.map((wallet) => setOnChainAssetAccess({
+        assetDbId: asset.id,
+        walletAddress: wallet.walletAddress,
+        organizationId,
+        actorUserId: userId,
+        enabled: true,
+      }))
+    );
+  } catch (error) {
+    await db.delete(assets).where(eq(assets.id, asset.id));
+    return { status: "error", message: error instanceof Error ? error.message : "On-chain permission grant failed." };
+  }
 
   if (memberIds.length > 0) {
     await db.insert(assetAccess).values(
@@ -163,6 +195,12 @@ export async function getOrgAssets(organizationId: string, userId: string) {
     with: { assignments: true },
   });
   if (!membership) return [];
+  if (!isPermissionRegistryConfigured()) return [];
+
+  const wallet = await db.query.walletIdentities.findFirst({
+    where: eq(walletIdentities.userId, userId),
+  });
+  if (!wallet) return [];
 
   const allAssets = await db.query.assets.findMany({
     where: eq(assets.organizationId, organizationId),
@@ -175,15 +213,13 @@ export async function getOrgAssets(organizationId: string, userId: string) {
     orderBy: (a, { desc }) => [desc(a.createdAt)],
   });
 
-  return allAssets.filter((asset) => {
-    if (["OWNER", "ADMIN"].includes(membership.role)) return true;
-    if (asset.ownerId === userId || asset.custodianId === userId) return true;
-    if (asset.access.some((grant) => grant.userId === userId)) return true;
-    if (!asset.departmentId) return true;
-    return membership.assignments.some(
-      (assignment) => assignment.departmentId === asset.departmentId
-    );
-  });
+  const visible = await Promise.all(
+    allAssets.map(async (asset) => ({
+      asset,
+      allowed: await hasOnChainAssetAccess(asset.id, wallet.walletAddress),
+    }))
+  );
+  return visible.filter((entry) => entry.allowed).map((entry) => entry.asset);
 }
 
 /** Update asset custodian - creates an audit event and anchors if critical */
@@ -251,6 +287,23 @@ export async function grantAssetAccess(
   });
   if (!member) return { status: "error", message: "Selected member is not active in this organization." };
 
+  const wallet = await db.query.walletIdentities.findFirst({
+    where: eq(walletIdentities.userId, userId),
+  });
+  if (!wallet) return { status: "error", message: "Selected member has no linked wallet." };
+
+  try {
+    await setOnChainAssetAccess({
+      assetDbId,
+      walletAddress: wallet.walletAddress,
+      organizationId: asset.organizationId,
+      actorUserId: session.user.id,
+      enabled: true,
+    });
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "On-chain permission grant failed." };
+  }
+
   await db.insert(assetAccess).values({ assetId: assetDbId, userId, grantedById: session.user.id }).onConflictDoNothing();
   const accessEvent = await createAuditEvent({
     organizationId: asset.organizationId,
@@ -282,6 +335,23 @@ export async function revokeAssetAccess(
   if (!asset) return { status: "error", message: "Asset not found." };
   const caller = await assertOrgAccess(asset.organizationId, session.user.id);
   if (!caller) return { status: "error", message: "Access denied." };
+
+  const wallet = await db.query.walletIdentities.findFirst({
+    where: eq(walletIdentities.userId, userId),
+  });
+  if (!wallet) return { status: "error", message: "Selected member has no linked wallet." };
+
+  try {
+    await setOnChainAssetAccess({
+      assetDbId,
+      walletAddress: wallet.walletAddress,
+      organizationId: asset.organizationId,
+      actorUserId: session.user.id,
+      enabled: false,
+    });
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "On-chain permission revoke failed." };
+  }
 
   await db.delete(assetAccess).where(and(eq(assetAccess.assetId, assetDbId), eq(assetAccess.userId, userId)));
   const accessEvent = await createAuditEvent({

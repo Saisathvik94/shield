@@ -1,6 +1,10 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { assets, organizationMemberships, auditEvents } from "@/db/schema";
+import { assets, organizationMemberships, auditEvents, walletIdentities } from "@/db/schema";
+import {
+  hasOnChainAssetAccess,
+  isPermissionRegistryConfigured,
+} from "@/lib/algorand/permission-registry";
 
 /** Full asset detail including related entities */
 export async function getAssetById(assetDbId: string, userId: string) {
@@ -32,12 +36,14 @@ export async function getAssetById(assetDbId: string, userId: string) {
   });
   if (!membership) return null;
 
-  const canView = canViewAsset(asset, membership, userId);
-  if (!canView) return null;
+  if (!isPermissionRegistryConfigured()) return null;
+  const wallet = await db.query.walletIdentities.findFirst({
+    where: eq(walletIdentities.userId, userId),
+  });
+  if (!wallet || !(await hasOnChainAssetAccess(asset.id, wallet.walletAddress))) return null;
 
   return { asset, membership };
 }
-
 // Infer the type of the asset returned with relations
 export type AssetWithRelations = NonNullable<
   Awaited<ReturnType<typeof getAssetById>>
@@ -52,7 +58,6 @@ export async function getAssetIpfsObjects(assetDbId: string) {
     with: { uploadedBy: true },
   });
 }
-
 /** Blockchain records for an asset */
 export async function getAssetBlockchainRecords(assetDbId: string) {
   const { blockchainRecords } = await import("@/db/schema");
@@ -79,26 +84,3 @@ export async function getAssetAuditEvents(assetDbId: string, limit = 20) {
   });
 }
 
-function canViewAsset(
-  asset: {
-    organizationId: string;
-    departmentId: string | null;
-    ownerId: string | null;
-    custodianId: string | null;
-    access: { userId: string }[];
-  },
-  membership: {
-    role: string;
-    assignments: { departmentId: string | null }[];
-  },
-  userId: string
-) {
-  if (["OWNER", "ADMIN"].includes(membership.role)) return true;
-  if (asset.ownerId === userId || asset.custodianId === userId) return true;
-  if (asset.access.some((grant) => grant.userId === userId)) return true;
-  if (!asset.departmentId) return true;
-
-  return membership.assignments.some(
-    (assignment) => assignment.departmentId === asset.departmentId
-  );
-}
