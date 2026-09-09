@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../app/generated/prisma"
@@ -10,4 +8,142 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+// -----------------------------------------------------------------------------
+// Authentication & Core Models
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  employee Employee?
+
+  @@index([email])
+  @@map("users")
+}
+
+model Organization {
+  id          String             @id @default(uuid())
+  name        String
+  slug        String             @unique
+  description String?
+  status      OrganizationStatus @default(ACTIVE)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  departments Department[]
+  employees   Employee[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("organizations")
+}
+
+model Department {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  code           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sections     Section[]
+  employees    Employee[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model Section {
+  id           String   @id @default(uuid())
+  departmentId String
+  name         String
+  code         String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  teams      Team[]
+  employees  Employee[]
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
+  @@map("sections")
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  sectionId   String
+  name        String
+  code        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  section   Section    @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  employees Employee[]
+
+  @@unique([sectionId, code])
+  @@index([sectionId])
+  @@map("teams")
+}
+
+model Employee {
+  id             String         @id @default(uuid())
+  employeeCode   String
+  firstName      String
+  lastName       String
+  email          String
+  phone          String?
+  designation    String?
+  status         EmployeeStatus @default(ACTIVE)
+  organizationId String
+  departmentId   String?
+  sectionId      String?
+  teamId         String?
+  userId         String?        @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  section      Section?     @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, employeeCode])
+  @@index([organizationId])
+  @@index([departmentId])
+  @@index([sectionId])
+  @@index([teamId])
+  @@index([email])
+  @@index([status])
+  @@map("employees")
 }

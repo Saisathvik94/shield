@@ -12,6 +12,7 @@
   "dependencies": {
     "@prisma/client": "^7.10.0",
     "algosdk": "^3.7.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "next": "16.3.4",
     "next-auth": "^4.24.15",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
