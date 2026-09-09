@@ -24,7 +24,7 @@ export default async function OrgSettingsPage({ params }: Props) {
 
   if (!org || !membership || membership.status !== "ACTIVE") notFound();
 
-  const [departments, members] = await Promise.all([
+  const [departments, allMembers] = await Promise.all([
     getDepartments(orgId),
     getOrganizationMembers(orgId),
   ]);
@@ -47,14 +47,9 @@ export default async function OrgSettingsPage({ params }: Props) {
         name: d.name,
         description: d.description,
         headId: d.headId,
-        sections: d.sections.map((s) => ({
-          id: s.id,
-          name: s.name,
-          headId: s.headId,
-          teams: s.teams.map((t) => ({ id: t.id, name: t.name })),
-        })),
+        members: d.members,
       }))}
-      members={members.map((m) => ({
+      allMembers={allMembers.map((m) => ({
         id: m.userId,
         name: m.user.name,
         email: m.user.email,

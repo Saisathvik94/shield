@@ -1,5 +1,8 @@
 import { auth } from "@/lib/auth";
-import { getOrganizationsByUser } from "@/db/queries/organizations";
+import {
+  getOrganizationsByUser,
+  getPendingInvitationsForEmail,
+} from "@/db/queries/organizations";
 import { getUserWithOrgs } from "@/db/queries/users";
 import { getOrgAuditEvents } from "@/db/queries/audit";
 import Link from "next/link";
@@ -11,6 +14,7 @@ import {
   Fingerprint,
   Package,
   ArrowRight,
+  Mail,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,9 +24,12 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) return null;
 
-  const [user, orgs] = await Promise.all([
+  const [user, orgs, pendingInvitations] = await Promise.all([
     getUserWithOrgs(session.user.id),
     getOrganizationsByUser(session.user.id),
+    session.user.email
+      ? getPendingInvitationsForEmail(session.user.email)
+      : Promise.resolve([]),
   ]);
 
   // Grab audit events from the first org for quick activity feed
@@ -69,6 +76,49 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {pendingInvitations.length > 0 && (
+          <Card className="lg:col-span-2 border-amber-500/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-amber-400" />
+                Pending invitations
+                <Badge className="ml-auto text-amber-300 bg-amber-500/10">
+                  {pendingInvitations.length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-white/[0.04]">
+                {pendingInvitations.map((invitation) => (
+                  <li
+                    key={invitation.id}
+                    className="flex items-center gap-3 px-5 py-3"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium truncate">
+                        {invitation.organization.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {invitation.role} access · expires {invitation.expiresAt.toLocaleDateString("en-GB")}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/invite/${invitation.token}`}
+                      className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 transition-colors shrink-0"
+                    >
+                      Review invitation
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Organizations */}
         <Card>
           <CardHeader>

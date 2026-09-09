@@ -39,7 +39,7 @@ export default async function OrgOverviewPage({ params }: Props) {
 
   const [members, assets, auditEvents] = await Promise.all([
     getOrganizationMembers(orgId),
-    getOrgAssets(orgId),
+    getOrgAssets(orgId, session.user.id),
     getOrgAuditEvents(orgId, 10),
   ]);
 

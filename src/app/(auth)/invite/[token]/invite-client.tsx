@@ -158,7 +158,7 @@ export function InviteClient({
         </button>
 
         <p className="text-center text-xs text-gray-500">
-          Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+          Expires {new Date(invitation.expiresAt).toLocaleDateString("en-GB")}
         </p>
       </div>
     </div>

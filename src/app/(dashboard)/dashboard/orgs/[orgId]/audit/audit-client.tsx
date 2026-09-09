@@ -209,11 +209,11 @@ function AuditEventRow({
           <div className="flex flex-col items-end gap-1.5 shrink-0">
             {txId ? (
               <a
-                href={`https://testnet.algoexplorer.io/tx/${txId}`}
+                href={`https://testnet.explorer.perawallet.app/tx/${txId}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-500 hover:text-emerald-400 transition-colors"
-                title="View on AlgoExplorer"
+                title="View on Pera Explorer"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -240,7 +240,7 @@ function AuditEventRow({
               {txId}
             </span>
             <a
-              href={`https://testnet.algoexplorer.io/tx/${txId}`}
+              href={`https://testnet.explorer.perawallet.app/tx/${txId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-500 hover:text-emerald-400 transition-colors shrink-0"

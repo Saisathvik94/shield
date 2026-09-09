@@ -58,17 +58,11 @@ export default async function MembersPage({ params }: Props) {
               | { department?: { name: string } }
               | undefined
           )?.department?.name ?? null,
-        section:
-          (
-            m.assignments?.[0] as
-              | { section?: { name: string } }
-              | undefined
-          )?.section?.name ?? null,
+        section: null,
       }))}
       departments={departments.map((d) => ({
         id: d.id,
         name: d.name,
-        sections: d.sections.map((s) => ({ id: s.id, name: s.name })),
       }))}
       pendingInvites={pendingInvites.map((inv) => {
         const typed = inv as typeof inv & {

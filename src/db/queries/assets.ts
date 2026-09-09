@@ -12,6 +12,12 @@ export async function getAssetById(assetDbId: string, userId: string) {
       department: true,
       section: true,
       organization: true,
+      access: {
+        with: {
+          user: true,
+          grantedBy: true,
+        },
+      },
     },
   });
   if (!asset) return null;
@@ -22,8 +28,12 @@ export async function getAssetById(assetDbId: string, userId: string) {
       eq(organizationMemberships.userId, userId),
       eq(organizationMemberships.status, "ACTIVE")
     ),
+    with: { assignments: true },
   });
   if (!membership) return null;
+
+  const canView = canViewAsset(asset, membership, userId);
+  if (!canView) return null;
 
   return { asset, membership };
 }
@@ -67,4 +77,28 @@ export async function getAssetAuditEvents(assetDbId: string, limit = 20) {
     limit,
     with: { actor: true },
   });
+}
+
+function canViewAsset(
+  asset: {
+    organizationId: string;
+    departmentId: string | null;
+    ownerId: string | null;
+    custodianId: string | null;
+    access: { userId: string }[];
+  },
+  membership: {
+    role: string;
+    assignments: { departmentId: string | null }[];
+  },
+  userId: string
+) {
+  if (["OWNER", "ADMIN"].includes(membership.role)) return true;
+  if (asset.ownerId === userId || asset.custodianId === userId) return true;
+  if (asset.access.some((grant) => grant.userId === userId)) return true;
+  if (!asset.departmentId) return true;
+
+  return membership.assignments.some(
+    (assignment) => assignment.departmentId === asset.departmentId
+  );
 }

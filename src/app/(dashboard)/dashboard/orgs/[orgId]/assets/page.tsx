@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
-import { getMembership, getOrganizationById, getDepartments } from "@/db/queries/organizations";
+import { getMembership, getOrganizationById, getDepartments, getOrganizationMembers } from "@/db/queries/organizations";
 import { getOrgAssets } from "@/lib/actions/asset-actions";
 import { AssetsClient } from "./assets-client";
 
@@ -20,9 +20,10 @@ export default async function AssetsPage({ params }: Props) {
 
   if (!org || !membership || membership.status !== "ACTIVE") notFound();
 
-  const [assets, departments] = await Promise.all([
-    getOrgAssets(orgId),
+  const [assets, departments, members] = await Promise.all([
+    getOrgAssets(orgId, session.user.id),
     getDepartments(orgId),
+    getOrganizationMembers(orgId),
   ]);
 
   const canManage = ["OWNER", "ADMIN", "MANAGER"].includes(membership.role);
@@ -57,6 +58,7 @@ export default async function AssetsPage({ params }: Props) {
         };
       })}
       departments={departments.map((d) => ({ id: d.id, name: d.name }))}
+      members={members.map((m) => ({ id: m.userId, name: m.user.name, email: m.user.email }))}
       canManage={canManage}
     />
   );

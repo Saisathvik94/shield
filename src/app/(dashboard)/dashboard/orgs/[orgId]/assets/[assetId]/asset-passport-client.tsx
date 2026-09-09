@@ -12,6 +12,7 @@ import {
   ArrowRightLeft, ThumbsUp, ThumbsDown, Archive, Fingerprint,
 } from "lucide-react";
 import { uploadAssetDocument, verifyFileIntegrity } from "@/lib/ipfs/ipfs-actions";
+import { grantAssetAccess, revokeAssetAccess } from "@/lib/actions/asset-actions";
 import { tokeniseAsset } from "@/lib/algorand/algorand-actions";
 import {
   requestTransfer,
@@ -40,6 +41,7 @@ interface AssetData {
 }
 
 interface OrgMember { id: string; name: string; email: string; }
+interface AssetAccess { user: OrgMember; }
 
 interface IpfsObjectData {
   id: string; cid: string; gatewayUrl: string | null; objectType: string;
@@ -63,6 +65,7 @@ interface AuditEventData {
 interface Props {
   orgId: string; canManage: boolean; isOwnerOrAdmin: boolean;
   currentUserId: string; asset: AssetData; orgMembers: OrgMember[];
+  access: AssetAccess[];
   ipfsObjects: IpfsObjectData[]; blockchainRecords: BlockchainRecordData[];
   auditEvents: AuditEventData[];
 }
@@ -83,6 +86,7 @@ const STATUS_COLORS: Record<string, string> = {
 export function AssetPassportClient({
   orgId, canManage, isOwnerOrAdmin, currentUserId,
   asset, orgMembers, ipfsObjects, blockchainRecords, auditEvents,
+  access,
 }: Props) {
   const cls = classificationColor(asset.classification);
   const statusCls = STATUS_COLORS[asset.status] ?? "text-gray-400 bg-gray-400/10";
@@ -132,7 +136,7 @@ export function AssetPassportClient({
                   </Badge>
                 )}
                 {asset.blockchainTxId && (
-                  <a href={`https://testnet.algoexplorer.io/tx/${asset.blockchainTxId}`} target="_blank" rel="noopener noreferrer">
+                  <a href={`https://testnet.explorer.perawallet.app/tx/${asset.blockchainTxId}`} target="_blank" rel="noopener noreferrer">
                     <Badge variant="success" className="gap-1 cursor-pointer hover:opacity-80">
                       <ExternalLink className="w-3 h-3" /> View on Algorand
                     </Badge>
@@ -177,6 +181,12 @@ export function AssetPassportClient({
             orgId={orgId}
             assetDbId={asset.id}
             ipfsObjects={ipfsObjects}
+            canManage={canManage}
+          />
+          <AccessPanel
+            assetDbId={asset.id}
+            access={access}
+            orgMembers={orgMembers}
             canManage={canManage}
           />
           {blockchainRecords.length > 0 && <BlockchainPanel records={blockchainRecords} />}
@@ -459,6 +469,7 @@ function DocumentsPanel({
   const [uploadPending, startUpload] = useTransition();
   const [verifyPending, startVerify] = useTransition();
   const [dragOver, setDragOver] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [verifyCid, setVerifyCid] = useState("");
   const [verifyResult, setVerifyResult] = useState<{
     status: "verified" | "tampered" | "not_found" | "error" | null;
@@ -467,15 +478,35 @@ function DocumentsPanel({
 
   function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const file = files[0];
-    const fd = new FormData();
-    fd.append("file", file);
+    const filesToUpload = Array.from(files);
     startUpload(async () => {
-      const result = await uploadAssetDocument(fd, orgId, assetDbId);
-      if (result.status === "success") {
-        toast.success(`"${file.name}" pinned to IPFS`, { description: `CID: ${result.cid.slice(0, 20)}…` });
+      setUploadProgress({ current: 0, total: filesToUpload.length });
+      let uploadedCount = 0;
+      const failures: string[] = [];
+
+      for (const file of filesToUpload) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const result = await uploadAssetDocument(fd, orgId, assetDbId);
+
+        if (result.status === "success") {
+          uploadedCount += 1;
+        } else {
+          failures.push(`${file.name}: ${result.message}`);
+        }
+        setUploadProgress((progress) => ({ ...progress, current: progress.current + 1 }));
+      }
+
+      if (uploadedCount > 0) {
+        toast.success(`${uploadedCount} file${uploadedCount === 1 ? "" : "s"} pinned to IPFS`);
         router.refresh();
-      } else toast.error(result.message);
+      }
+      if (failures.length > 0) {
+        toast.error(`${failures.length} file${failures.length === 1 ? "" : "s"} failed`, {
+          description: failures[0],
+        });
+      }
+      setUploadProgress({ current: 0, total: 0 });
       if (uploadRef.current) uploadRef.current.value = "";
     });
   }
@@ -523,17 +554,22 @@ function DocumentsPanel({
               )}
             >
               {uploadPending ? (
-                <><Loader2 className="w-8 h-8 text-blue-400 animate-spin" /><p className="text-sm text-blue-300">Pinning to IPFS…</p></>
+                <>
+                  <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                  <p className="text-sm text-blue-300">
+                    Pinning {uploadProgress.current} of {uploadProgress.total} to IPFS…
+                  </p>
+                </>
               ) : (
                 <>
                   <CloudUpload className="w-8 h-8 text-gray-500" />
                   <div className="text-center">
-                    <p className="text-sm text-gray-300">Drop a file or <span className="text-blue-400">browse</span></p>
-                    <p className="text-xs text-gray-600 mt-0.5">Any format · Max 50 MB · SHA-256 computed</p>
+                    <p className="text-sm text-gray-300">Drop files or <span className="text-blue-400">browse</span></p>
+                    <p className="text-xs text-gray-600 mt-0.5">Any format · Max 50 MB each · SHA-256 computed</p>
                   </div>
                 </>
               )}
-              <input ref={uploadRef} type="file" className="hidden" onChange={(e) => handleUpload(e.target.files)} />
+              <input ref={uploadRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} />
             </div>
           </div>
         )}
@@ -578,6 +614,102 @@ function DocumentsPanel({
             </div>
           )}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AccessPanel({
+  assetDbId,
+  access,
+  orgMembers,
+  canManage,
+}: {
+  assetDbId: string;
+  access: AssetAccess[];
+  orgMembers: OrgMember[];
+  canManage: boolean;
+}) {
+  const router = useRouter();
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [pending, startTransition] = useTransition();
+  const grantedIds = new Set(access.map((grant) => grant.user.id));
+  const availableMembers = orgMembers.filter((member) => !grantedIds.has(member.id));
+
+  function handleGrant() {
+    if (!selectedUserId) return;
+    startTransition(async () => {
+      const result = await grantAssetAccess(assetDbId, selectedUserId);
+      if (result.status === "success") {
+        toast.success("Asset access granted");
+        setSelectedUserId("");
+        router.refresh();
+      } else toast.error(result.message);
+    });
+  }
+
+  function handleRevoke(user: OrgMember) {
+    if (!confirm(`Revoke asset access for ${user.name}?`)) return;
+    startTransition(async () => {
+      const result = await revokeAssetAccess(assetDbId, user.id);
+      if (result.status === "success") {
+        toast.success("Asset access revoked");
+        router.refresh();
+      } else toast.error(result.message);
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <User className="w-4 h-4 text-blue-400" /> Asset Access
+          <span className="ml-auto text-xs font-normal text-gray-500">{access.length} member{access.length === 1 ? "" : "s"}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {access.length === 0 ? (
+          <p className="text-sm text-gray-500">No additional members have access.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {access.map((grant) => (
+              <li key={grant.user.id} className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-gray-200 truncate">{grant.user.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{grant.user.email}</p>
+                </div>
+                {canManage && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => handleRevoke(grant.user)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    Revoke
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canManage && availableMembers.length > 0 && (
+          <div className="flex gap-2">
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="min-w-0 flex-1 rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/60"
+            >
+              <option value="">- Select member -</option>
+              {availableMembers.map((member) => (
+                <option key={member.id} value={member.id}>{member.name} ({member.email})</option>
+              ))}
+            </select>
+            <Button size="sm" variant="secondary" loading={pending} disabled={!selectedUserId} onClick={handleGrant}>
+              Grant access
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -637,7 +769,7 @@ function BlockchainPanel({ records }: { records: BlockchainRecordData[] }) {
       <CardContent className="p-0">
         <ul className="divide-y divide-white/[0.04]">
           {records.map((r) => {
-            const explorerBase = r.network === "testnet" ? "https://testnet.algoexplorer.io" : "https://algoexplorer.io";
+            const explorerBase = r.network === "testnet" ? "https://testnet.explorer.perawallet.app" : "https://explorer.perawallet.app";
             return (
               <li key={r.id} className="px-5 py-3.5">
                 <div className="flex items-start justify-between gap-3">

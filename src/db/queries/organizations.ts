@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 import { db } from "@/db";
 import {
   organizations,
@@ -6,6 +6,7 @@ import {
   departments,
   sections,
   teams,
+  invitations,
 } from "@/db/schema";
 import type { NewOrganization } from "@/db/schema";
 
@@ -46,6 +47,18 @@ export async function getOrganizationsByUser(userId: string) {
     role: m.role,
     membershipId: m.id,
   }));
+}
+
+export async function getPendingInvitationsForEmail(email: string) {
+  return db.query.invitations.findMany({
+    where: and(
+      eq(invitations.email, email.toLowerCase()),
+      eq(invitations.status, "PENDING"),
+      gt(invitations.expiresAt, new Date())
+    ),
+    with: { organization: true },
+    orderBy: (invitation, { desc }) => [desc(invitation.createdAt)],
+  });
 }
 
 export async function createOrganization(
@@ -116,17 +129,45 @@ export async function getOrganizationMembers(organizationId: string) {
 }
 
 export async function getDepartments(organizationId: string) {
-  return db.query.departments.findMany({
+  // Fetch departments with head user info
+  const depts = await db.query.departments.findMany({
     where: eq(departments.organizationId, organizationId),
+    with: { head: true },
+    orderBy: (d, { asc }) => [asc(d.name)],
+  });
+
+  // For each department, find members assigned to it
+  const allAssignments = await db.query.memberAssignments.findMany({
+    where: (a, { isNotNull }) => isNotNull(a.departmentId),
     with: {
-      head: true,
-      sections: {
-        with: {
-          head: true,
-          teams: { with: { lead: true } },
-        },
+      membership: {
+        with: { user: true },
       },
     },
+  });
+
+  return depts.map((dept) => {
+    const deptMembers = allAssignments
+      .filter(
+        (a) =>
+          a.departmentId === dept.id &&
+          (a.membership as { organizationId?: string; status?: string } | null)
+      )
+      .map((a) => {
+        const m = a.membership as {
+          userId: string;
+          role: string;
+          status: string;
+          user: { id: string; name: string; email: string };
+        } | null;
+        return m ? { userId: m.userId, name: m.user.name, email: m.user.email, role: m.role } : null;
+      })
+      .filter(Boolean) as { userId: string; name: string; email: string; role: string }[];
+
+    return {
+      ...dept,
+      members: deptMembers,
+    };
   });
 }
 

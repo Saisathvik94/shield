@@ -34,6 +34,7 @@ export default async function AssetDetailPage({ params }: Props) {
     custodian: { id: string; name: string; email: string } | null;
     department: { name: string } | null;
     section: { name: string } | null;
+    access: { user: { id: string; name: string; email: string } }[];
   };
 
   const [ipfsObjects, blockchainRecords, auditEvents, orgMembers] =
@@ -99,6 +100,9 @@ export default async function AssetDetailPage({ params }: Props) {
         id: m.userId,
         name: m.user.name,
         email: m.user.email,
+      }))}
+      access={asset.access.map((grant) => ({
+        user: { id: grant.user.id, name: grant.user.name, email: grant.user.email },
       }))}
       ipfsObjects={ipfsObjects.map((obj) => ({
         id: obj.id,

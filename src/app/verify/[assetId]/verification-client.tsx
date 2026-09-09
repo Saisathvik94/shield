@@ -248,7 +248,7 @@ export function VerificationClient({
                     {asset.algorandAssetId}
                   </span>
                   <a
-                    href={`https://testnet.algoexplorer.io/asset/${asset.algorandAssetId}`}
+                    href={`https://testnet.explorer.perawallet.app/asset/${asset.algorandAssetId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-500 hover:text-emerald-400 transition-colors shrink-0"
@@ -445,13 +445,13 @@ function AlgorandLiveCard({
 
       <div className="px-5 pb-4 flex gap-3">
         <a
-          href={`https://testnet.algoexplorer.io/asset/${info.assetId}`}
+          href={`https://testnet.explorer.perawallet.app/asset/${info.assetId}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:underline"
         >
           <ExternalLink className="w-3 h-3" />
-          View on AlgoExplorer
+          View on Pera Explorer
         </a>
         {info.url && (
           <a
@@ -484,8 +484,8 @@ function BlockchainRecordsCard({ records }: { records: BlockchainRecord[] }) {
       <ul className="divide-y divide-white/[0.04]">
         {records.map((r) => {
           const explorerBase = r.network === "testnet"
-            ? "https://testnet.algoexplorer.io"
-            : "https://algoexplorer.io";
+            ? "https://testnet.explorer.perawallet.app"
+            : "https://explorer.perawallet.app";
           return (
             <li key={r.txId} className="px-5 py-3 flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
@@ -508,7 +508,7 @@ function BlockchainRecordsCard({ records }: { records: BlockchainRecord[] }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-500 hover:text-emerald-400 transition-colors shrink-0"
-                title="View on AlgoExplorer"
+                title="View on Pera Explorer"
               >
                 <ExternalLink className="w-4 h-4" />
               </a>

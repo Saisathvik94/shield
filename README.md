@@ -13,14 +13,20 @@
 
 ## What is SHIELD?
 
-SHIELD is a full-stack enterprise security platform where every user has **one global identity** anchored to an **Algorand Pera Wallet**, and that identity can participate in **multiple organizations** - each with its own hierarchy, roles, and assets.
+SHIELD is a full-stack enterprise security platform where every user has **one global identity** linked to a **Pera Wallet**, and that identity can participate in **multiple organizations** - each with its own hierarchy, roles, scoped permissions, and digital or physical assets.
 
 Think of it as Jira for organizations, but with:
 - Cryptographic wallet-based identity (no passwords)
 - Blockchain-anchored audit proofs on Algorand
 - Decentralized file storage via IPFS/Pinata with SHA-256 integrity
 - Non-fungible asset tokenization as Algorand Standard Assets (ASAs)
+- Department-scoped asset visibility with explicit member-level access grants
 - A public QR-based verification page for physical assets
+
+The platform separates two concerns:
+
+- **Operational truth:** PostgreSQL stores current users, memberships, asset permissions, files, and workflow state.
+- **Evidence:** Algorand stores immutable proofs of identity, asset lifecycle events, permission changes, transfers, revocations, and audit anchors.
 
 ---
 
@@ -37,6 +43,7 @@ SHIELD
 │   ├── Members + Roles (OWNER / ADMIN / MANAGER / AUDITOR / USER)
 │   └── Assets (digital + physical)
 │       ├── Owner + Custodian
+│       ├── Department scope + explicit member access grants
 │       ├── Lifecycle (REGISTERED → ACTIVE → TRANSFER_REQUESTED → TRANSFERRED → REVOKED/RETIRED)
 │       ├── IPFS Documents (Pinata)
 │       └── Algorand ASA (tokenized, clawback-controlled)
@@ -44,6 +51,7 @@ SHIELD
 ├── Trust Layer - Algorand TestNet
 │   ├── Identity Registration proofs
 │   ├── Asset Creation / Transfer / Revocation
+│   ├── Asset Permission Grant / Revoke proofs
 │   └── Audit Event anchoring (SHA-256 hashed notes)
 │
 └── Content Layer - IPFS via Pinata
@@ -68,6 +76,13 @@ SHIELD
 | Styling | Tailwind CSS v4 + Radix UI primitives |
 | Toasts | Sonner |
 
+### Runtime and deployment notes
+
+- The application uses the Next.js App Router and Server Actions.
+- Uploaded files are sent to Server Actions as multipart form data. The configured Server Action body limit is `55mb`; the application validates each file at `50 MB`.
+- The database connection uses Neon PostgreSQL through `@neondatabase/serverless` and WebSockets.
+- Development schema changes can be applied with `npm run db:push`.
+
 ---
 
 ## Features
@@ -79,6 +94,7 @@ SHIELD
 - **Cryptographic proof of wallet ownership**: server generates a one-time nonce (`/api/auth/nonce`), Pera signs it with `signData`, Auth.js verifies with `algosdk.verifyBytes` before creating a session
 - DID + wallet address is anchored on Algorand as an immutable identity proof on registration
 - JWT sessions - no server-side session storage required
+- Logging out disconnects the Pera Wallet client session as well as the SHIELD Auth.js session.
 
 ### 2. Multi-Tenant Organizations
 
@@ -86,6 +102,7 @@ SHIELD
 - Org creation anchors a `ORG_CREATED` proof on Algorand
 - Sidebar org switcher - switch context without re-login
 - Organization overview: member count, asset count, department count, recent activity
+- Dashboard users see pending invitations addressed to their signed-in email and can open the invite directly from the dashboard.
 
 ### 3. Organization Hierarchy
 
@@ -123,6 +140,8 @@ SHIELD
 | AUDITOR | - | - | - | ✓ | - |
 | USER | - | - | - | ✓ | - |
 
+Role permissions are separate from asset scope. A user may be a valid organization member but still be unable to open an asset outside their department unless an explicit grant exists.
+
 ### 5. Asset Registry
 
 Register any digital or physical asset:
@@ -141,7 +160,16 @@ Register any digital or physical asset:
 
 **Lifecycle statuses:** CREATED → REGISTERED → ASSIGNED → ACTIVE → TRANSFER_REQUESTED → TRANSFERRED → REVOKED → RETIRED
 
-**Registration form fields:** Asset ID (e.g. `RADAR-001`) · Name · Description · Type · Classification · Department · Location · **Physical Identifier** (QR/NFC/serial number)
+**Registration form fields:** Asset ID (e.g. `RADAR-001`) · Name · Description · Type · Classification · Department · Members with access · Files · Tokenise on creation · Location · **Physical Identifier** (QR/NFC/serial number)
+
+Asset creation can perform the initial workflow in one operation:
+
+1. Create the registry record.
+2. Add selected member access grants.
+3. Upload all selected files sequentially to IPFS.
+4. Tokenise the asset on Algorand when enabled and configured.
+
+Each file is uploaded independently, so a failure on one file does not require resending the others. The passport also supports adding more files later.
 
 **CRITICAL/SECRET/CONFIDENTIAL assets are automatically anchored on Algorand** at the moment of registration.
 
@@ -154,6 +182,10 @@ Every asset has a dedicated passport page at `/dashboard/orgs/[orgId]/assets/[as
 - **Tokenise on Algorand** button (visible to managers when not yet on-chain) - creates a real ASA (total=1, non-fungible) with the treasury as clawback authority
 - Primary IPFS CID and Algorand ASA ID with copy buttons
 - QR icon linking to the public verification page
+- Asset Access panel showing current grants
+- Grant access to active organization members after creation
+- Revoke existing member access after creation
+- All access changes create `ACCESS_GRANTED` or `ACCESS_REVOKED` audit events and Algorand proofs when Algorand is configured
 
 ### 7. Asset Transfer Flow
 
@@ -167,14 +199,27 @@ Every asset has a dedicated passport page at `/dashboard/orgs/[orgId]/assets/[as
 
 OWNER/ADMIN can retire any active asset (end-of-life) from the Danger Zone panel at the bottom of the passport. Sets status to `RETIRED`, creates a `ASSET_RETIRED` audit event.
 
-### 9. IPFS Document Management
+### 9. Department-Scoped Asset Access
 
-- **Drag-and-drop** file upload from the asset passport → pinned to Pinata → CID stored in `ipfs_objects` table and `assets.ipfsCid`
+Asset access is enforced on both the asset list and the direct asset URL:
+
+- `OWNER` and `ADMIN` can view all assets in the organization.
+- Other members can view unassigned assets.
+- Department members can view assets assigned to their department.
+- Owners and custodians can view their assigned assets.
+- Explicit `asset_access` grants allow selected members to view an asset regardless of department.
+- A direct URL does not bypass these rules; unauthorized assets return the normal not-found boundary.
+
+This means an Auditor in the Administrative department cannot open an Account department asset unless that member is explicitly granted access.
+
+### 10. IPFS Document Management
+
+- **Drag-and-drop or multi-select** file upload from the asset passport → each file is pinned to Pinata → each CID is stored in `ipfs_objects`, while the latest CID is also kept as `assets.ipfsCid`
 - **SHA-256 computed automatically** on every upload for later integrity checks
 - Files listed as expandable rows showing: filename, CID, hash, MIME type, uploader, pin date, gateway download link
 - **File integrity verifier**: paste any CID + re-upload the same file → SHIELD re-hashes it and compares against the stored SHA-256. Any byte-level change is detected immediately and flagged as `TAMPERED`
 
-### 10. Algorand Trust Layer
+### 11. Algorand Trust Layer
 
 Every critical operation creates an on-chain proof via the SHIELD treasury account:
 
@@ -186,19 +231,21 @@ Every critical operation creates an on-chain proof via the SHIELD treasury accou
 | Asset tokenization | ASA creation (total=1, decimals=0) | ARC-69 metadata, IPFS URL |
 | Asset transfer | ASA clawback via `assetSender` | From → To wallet |
 | Asset revocation | ASA clawback to treasury | Reason field |
+| Asset access grant | 0-ALGO self-payment audit anchor | Target user, asset, actor |
+| Asset access revoke | 0-ALGO self-payment audit anchor | Target user, asset, actor |
 | Manual anchor | 0-ALGO self-payment | Any audit event on demand |
 
-All transactions use **AlgoNode free TestNet** - no API token or paid account needed.
+All transactions use **AlgoNode free TestNet** - no API token or paid account needed. Transaction and ASA links use [Pera Explorer](https://explorer.perawallet.app), with testnet links under `https://testnet.explorer.perawallet.app`.
 
-### 11. Audit Trail
+### 12. Audit Trail
 
 - **21 event types** tracked: user lifecycle, org changes, member changes, role changes, asset lifecycle, IPFS uploads, blockchain anchors
 - Org-level audit page with colour-coded timeline (dot colour per event type)
 - Stats bar: total events · on-chain proofs · IPFS anchored · unique actors
 - **Per-event "Anchor" button** (OWNER/ADMIN only) - pushes any unanchored event to Algorand with one click
-- AlgoExplorer TX links for all anchored events
+- Pera Explorer TX links for all anchored events
 
-### 12. Public Asset Verification
+### 13. Public Asset Verification
 
 `/verify/RADAR-001` - fully public, no login required. Designed to be linked from a QR code on a physical asset.
 
@@ -217,7 +264,7 @@ All transactions use **AlgoNode free TestNet** - no API token or paid account ne
 - ⚠️ **Partial** - some proofs present but live Indexer check incomplete
 - ℹ️ **Registry record** - found in DB only, not yet tokenized
 
-### 13. Identity Page
+### 14. Identity Page
 
 Personal dashboard at `/dashboard/identity`:
 - DID with copy button
@@ -229,7 +276,7 @@ Personal dashboard at `/dashboard/identity`:
 
 ## Database Schema
 
-16 tables:
+17 tables:
 
 | Table | Purpose |
 |---|---|
@@ -244,6 +291,7 @@ Personal dashboard at `/dashboard/identity`:
 | `member_assignments` | Maps a membership to dept/section/team |
 | `invitations` | Invitation tokens with expiry and role |
 | `assets` | Asset registry with lifecycle and passport fields |
+| `asset_access` | Explicit asset-to-member grants with unique asset/member pairs |
 | `audit_events` | Immutable event log with optional blockchain TX ID |
 | `ipfs_objects` | Every pinned file with CID, SHA-256, and metadata |
 | `blockchain_records` | Every Algorand transaction with record type and note |
@@ -304,7 +352,7 @@ src/
 - Node.js 20+
 - A [Neon](https://neon.tech) PostgreSQL database
 - A [Pinata](https://pinata.cloud) account (free tier works)
-- An Algorand TestNet wallet with test ALGO ([dispenser](https://testnet.algoexplorer.io/dispenser))
+- An Algorand TestNet wallet with test ALGO ([TestNet dispenser](https://bank.testnet.algorand.network/))
 
 ### 1. Clone and install
 
@@ -348,6 +396,8 @@ ALGORAND_TREASURY_MNEMONIC="word1 word2 ... word25"
 ```bash
 npm run db:push
 ```
+
+For an existing Neon database, `db:push` is the simplest development command because it compares the current Drizzle schema with the database and applies only missing changes. `db:migrate` replays migration files and requires the database migration journal to be baselined consistently with the existing schema. Do not run both approaches against the same database without understanding the migration history.
 
 ### 4. Run
 
@@ -397,10 +447,10 @@ The complete demo story for judges:
 2. **Creates organization** BEL Research → `ORG_CREATED` anchored on-chain
 3. **Builds structure** → adds Electronics Department, Radar Section, assigns section head
 4. **Invites Rahul** → creates invite link → Rahul opens `/invite/<token>` → connects wallet → joins as Manager
-5. **Registers RADAR-001** → CRITICAL classification → auto-anchored on Algorand
-6. **Tokenizes RADAR-001** → one click → ASA created on Algorand TestNet
-7. **Uploads certificate** → drags PDF onto passport → pinned to IPFS → CID stored
-8. **Unauthorized user** tries to access → role check denies → `ACCESS_DENIED` event recorded
+5. **Registers RADAR-001** → selects department members, multiple files, and Tokenise on creation
+6. **Creation workflow completes** → asset record, access grants, IPFS files, and ASA are created in sequence
+7. **Department-scoped access** → an Administrative auditor cannot open the Account asset unless explicitly granted
+8. **Grant or revoke access later** → database permission changes create `ACCESS_GRANTED` / `ACCESS_REVOKED` audit proofs on Algorand
 9. **Rahul requests transfer** → Admin approves → ASA clawback transfer on-chain → custodian updated
 10. **Auditor opens audit trail** → sees full timeline → clicks Anchor on critical event → TX proof created
 11. **Scan QR code** on physical radar → opens `/verify/RADAR-001` → 5-check verification against live Algorand Indexer
@@ -420,11 +470,14 @@ All on-chain proofs use a structured JSON note field (max 1024 bytes):
   "assetDbId": "...",
   "eventType": "...",
   "eventHash": "sha256-of-event-payload",
+  "resourceType": "asset | asset_access | membership | organization",
+  "resourceId": "asset-id-or-asset-id:target-user-id",
+  "orgId": "...",
   "ts": 1234567890
 }
 ```
 
-These are verifiable by anyone with access to the Algorand Indexer - no SHIELD account required.
+For permission proofs, `resourceType` is `asset_access` and `resourceId` combines the asset and target member IDs. These are verifiable by anyone with access to the Algorand Indexer - no SHIELD account required.
 
 ---
 

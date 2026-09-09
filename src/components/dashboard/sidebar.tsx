@@ -68,7 +68,7 @@ const orgNavItems = (orgId: string) => [
 
 export function Sidebar({ orgs, activeOrgId, userName, userEmail }: SidebarProps) {
   const pathname = usePathname();
-  const { address } = useWallet();
+  const { address, disconnect } = useWallet();
   const [orgPickerOpen, setOrgPickerOpen] = useState(false);
 
   const activeOrg = orgs.find((o) => o.id === activeOrgId) ?? orgs[0];
@@ -77,6 +77,11 @@ export function Sidebar({ orgs, activeOrgId, userName, userEmail }: SidebarProps
   function isActive(href: string, exact = false) {
     if (exact) return pathname === href;
     return pathname.startsWith(href);
+  }
+
+  async function handleLogout() {
+    await disconnect();
+    await logout();
   }
 
   return (
@@ -228,15 +233,14 @@ export function Sidebar({ orgs, activeOrgId, userName, userEmail }: SidebarProps
               <p className="text-xs font-medium text-white truncate">{userName}</p>
               <p className="text-[10px] text-gray-500 truncate">{userEmail}</p>
             </div>
-            <form action={logout}>
-              <button
-                type="submit"
+            <button
+                type="button"
+                onClick={() => void handleLogout()}
                 className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.08] transition-colors"
                 title="Sign out"
               >
                 <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </form>
+            </button>
           </div>
         </div>
       </div>

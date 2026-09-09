@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createAsset } from "@/lib/actions/asset-actions";
+import { uploadAssetDocument } from "@/lib/ipfs/ipfs-actions";
+import { tokeniseAsset } from "@/lib/algorand/algorand-actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -79,6 +81,7 @@ interface Props {
   orgName: string;
   assets: Asset[];
   departments: { id: string; name: string }[];
+  members: { id: string; name: string; email: string }[];
   canManage: boolean;
 }
 
@@ -87,6 +90,7 @@ export function AssetsClient({
   orgName,
   assets,
   departments,
+  members,
   canManage,
 }: Props) {
   const router = useRouter();
@@ -106,6 +110,9 @@ export function AssetsClient({
     location: "",
     physicalIdentifier: "",
   });
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [tokeniseOnCreate, setTokeniseOnCreate] = useState(true);
 
   const filtered = assets.filter((a) => {
     const matchSearch =
@@ -135,10 +142,27 @@ export function AssetsClient({
         departmentId: form.departmentId || undefined,
         location: form.location || undefined,
         physicalIdentifier: form.physicalIdentifier || undefined,
+        memberIds: selectedMemberIds,
       });
 
       if (result.status === "success") {
-        toast.success(`Asset ${form.assetId} registered`);
+        let uploadFailures = 0;
+        for (const file of files) {
+          const formData = new FormData();
+          formData.append("file", file);
+          const uploadResult = await uploadAssetDocument(formData, orgId, result.assetId);
+          if (uploadResult.status === "error") uploadFailures += 1;
+        }
+
+        let tokeniseMessage = "";
+        if (tokeniseOnCreate) {
+          const tokeniseResult = await tokeniseAsset(result.assetId);
+          tokeniseMessage = tokeniseResult.status === "success"
+            ? " and tokenised"
+            : tokeniseResult.status === "skipped" ? " (tokenisation skipped)" : " (tokenisation failed)";
+        }
+
+        toast.success(`Asset ${form.assetId} registered${tokeniseMessage}${uploadFailures ? ` (${uploadFailures} upload${uploadFailures === 1 ? "" : "s"} failed)` : ""}`);
         setOpen(false);
         setForm({
           assetId: "",
@@ -150,6 +174,8 @@ export function AssetsClient({
           location: "",
           physicalIdentifier: "",
         });
+        setSelectedMemberIds([]);
+        setFiles([]);
         router.refresh();
       } else {
         toast.error(result.message);
@@ -252,6 +278,39 @@ export function AssetsClient({
                     </select>
                   </div>
                 )}
+
+                {members.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-gray-300">Give access to members (optional)</label>
+                    <select
+                      multiple
+                      value={selectedMemberIds}
+                      onChange={(e) => setSelectedMemberIds(Array.from(e.target.selectedOptions, (option) => option.value))}
+                      className="w-full min-h-24 rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/60"
+                    >
+                      {members.map((member) => (
+                        <option key={member.id} value={member.id}>{member.name} ({member.email})</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500">Hold Ctrl or Command to select more than one member.</p>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-300">Files (optional)</label>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                    className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-gray-300"
+                  />
+                  {files.length > 0 && <p className="text-[10px] text-gray-500">{files.length} file{files.length === 1 ? "" : "s"} selected, up to 50 MB each.</p>}
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <input type="checkbox" checked={tokeniseOnCreate} onChange={(e) => setTokeniseOnCreate(e.target.checked)} />
+                  Tokenise on creation when Algorand is configured
+                </label>
 
                 <Input
                   label="Location (optional)"

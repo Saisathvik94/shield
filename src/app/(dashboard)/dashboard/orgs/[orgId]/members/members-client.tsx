@@ -16,7 +16,6 @@ import {
   UserMinus,
   ShieldCheck,
   Clock,
-  ChevronDown,
   Send,
   Trash2,
 } from "lucide-react";
@@ -49,7 +48,6 @@ interface Member {
 interface Department {
   id: string;
   name: string;
-  sections: { id: string; name: string }[];
 }
 
 interface PendingInvite {
@@ -530,11 +528,8 @@ function InviteForm({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<(typeof ALL_ROLES)[number]>("USER");
   const [deptId, setDeptId] = useState("");
-  const [sectionId, setSectionId] = useState("");
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
-
-  const selectedDept = departments.find((d) => d.id === deptId);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -545,7 +540,6 @@ function InviteForm({
         email: email.trim(),
         role,
         departmentId: deptId || undefined,
-        sectionId: sectionId || undefined,
       });
 
       if (result.status === "success") {
@@ -654,30 +648,12 @@ function InviteForm({
           </label>
           <select
             value={deptId}
-            onChange={(e) => { setDeptId(e.target.value); setSectionId(""); }}
+            onChange={(e) => setDeptId(e.target.value)}
             className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/60"
           >
             <option value="">- None -</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {selectedDept && selectedDept.sections.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-300">
-            Section (optional)
-          </label>
-          <select
-            value={sectionId}
-            onChange={(e) => setSectionId(e.target.value)}
-            className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/60"
-          >
-            <option value="">- None -</option>
-            {selectedDept.sections.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </div>

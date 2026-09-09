@@ -447,6 +447,30 @@ export const assets = pgTable(
   ]
 );
 
+// Explicit per-asset access grants for organization members.
+export const assetAccess = pgTable(
+  "asset_access",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    grantedById: uuid("granted_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("asset_access_asset_user_idx").on(t.assetId, t.userId),
+    index("asset_access_user_idx").on(t.userId),
+  ]
+);
+
 // ---------------------------------------------------------------------------
 // Audit Events
 // ---------------------------------------------------------------------------
@@ -495,6 +519,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   invitations: many(invitations),
   ownedAssets: many(assets, { relationName: "assetOwner" }),
   custodiedAssets: many(assets, { relationName: "assetCustodian" }),
+  grantedAssetAccess: many(assetAccess, { relationName: "assetAccessUser" }),
+  createdAssetAccessGrants: many(assetAccess, { relationName: "assetAccessGrantedBy" }),
   auditEvents: many(auditEvents),
 }));
 
@@ -538,6 +564,28 @@ export const organizationMembershipsRelations = relations(
   })
 );
 
+export const memberAssignmentsRelations = relations(
+  memberAssignments,
+  ({ one }) => ({
+    membership: one(organizationMemberships, {
+      fields: [memberAssignments.membershipId],
+      references: [organizationMemberships.id],
+    }),
+    department: one(departments, {
+      fields: [memberAssignments.departmentId],
+      references: [departments.id],
+    }),
+    section: one(sections, {
+      fields: [memberAssignments.sectionId],
+      references: [sections.id],
+    }),
+    team: one(teams, {
+      fields: [memberAssignments.teamId],
+      references: [teams.id],
+    }),
+  })
+);
+
 export const departmentsRelations = relations(departments, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [departments.organizationId],
@@ -577,7 +625,7 @@ export const teamsRelations = relations(teams, ({ one }) => ({
   lead: one(users, { fields: [teams.leadId], references: [users.id] }),
 }));
 
-export const assetsRelations = relations(assets, ({ one }) => ({
+export const assetsRelations = relations(assets, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [assets.organizationId],
     references: [organizations.id],
@@ -599,6 +647,25 @@ export const assetsRelations = relations(assets, ({ one }) => ({
     fields: [assets.custodianId],
     references: [users.id],
     relationName: "assetCustodian",
+  }),
+  ipfsObjects: many(ipfsObjects),
+  access: many(assetAccess),
+}));
+
+export const assetAccessRelations = relations(assetAccess, ({ one }) => ({
+  asset: one(assets, {
+    fields: [assetAccess.assetId],
+    references: [assets.id],
+  }),
+  user: one(users, {
+    fields: [assetAccess.userId],
+    references: [users.id],
+    relationName: "assetAccessUser",
+  }),
+  grantedBy: one(users, {
+    fields: [assetAccess.grantedById],
+    references: [users.id],
+    relationName: "assetAccessGrantedBy",
   }),
 }));
 
@@ -792,11 +859,6 @@ export const blockchainRecordsRelations = relations(
     }),
   })
 );
-
-// Extend assets relation to include ipfs objects
-export const assetsIpfsRelation = relations(assets, ({ many }) => ({
-  ipfsObjects: many(ipfsObjects),
-}));
 
 export type IpfsObject = typeof ipfsObjects.$inferSelect;
 export type NewIpfsObject = typeof ipfsObjects.$inferInsert;
