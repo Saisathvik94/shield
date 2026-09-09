@@ -1,267 +1,237 @@
-"use client";
-
-import React, { useEffect, useState } from "react";
-import { useOrganization } from "@/context/organization-context";
-import { StatCard } from "@/components/ui/stat-card";
-import { BlockchainCard } from "@/components/dashboard/blockchain-card";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { auth } from "@/lib/auth";
+import { getOrganizationsByUser } from "@/db/queries/organizations";
+import { getUserWithOrgs } from "@/db/queries/users";
+import { getOrgAuditEvents } from "@/db/queries/audit";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import {
+  Building2,
+  Plus,
+  ShieldIcon,
+  Activity,
+  Fingerprint,
+  Package,
+  ArrowRight,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { relativeTime, roleColor } from "@/lib/utils";
 
-interface OrgStats {
-  organization: {
-    id: string;
-    name: string;
-    slug: string;
-    status: "ACTIVE" | "INACTIVE" | "SUSPENDED";
-    description: string | null;
-  };
-  counts: {
-    totalEmployees: number;
-    activeEmployees: number;
-    departments: number;
-    sections: number;
-    teams: number;
-  };
-}
+export default async function DashboardPage() {
+  const session = await auth();
+  if (!session?.user?.id) return null;
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const { activeOrgId, loading: orgLoading } = useOrganization();
-  const [stats, setStats] = useState<OrgStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, orgs] = await Promise.all([
+    getUserWithOrgs(session.user.id),
+    getOrganizationsByUser(session.user.id),
+  ]);
 
-  useEffect(() => {
-    let ignore = false;
-    async function load() {
-      if (!activeOrgId) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const res = await fetch(`/api/organizations/${activeOrgId}/stats`);
-        if (res.ok && !ignore) {
-          const json = await res.json();
-          setStats(json.data);
-        }
-      } catch (err) {
-        console.error("Failed to load organization statistics", err);
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    }
-    load();
-    return () => {
-      ignore = true;
-    };
-  }, [activeOrgId]);
+  // Grab audit events from the first org for quick activity feed
+  const recentActivity =
+    orgs.length > 0 ? await getOrgAuditEvents(orgs[0].id, 8) : [];
 
-  if (orgLoading || (activeOrgId && loading && !stats)) {
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <LoadingSkeleton className="h-8 w-64" />
-          <LoadingSkeleton className="h-8 w-32" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <LoadingSkeleton key={i} className="h-32 rounded-2xl" />
-          ))}
-        </div>
-        <LoadingSkeleton className="h-64 rounded-2xl" />
-      </div>
-    );
-  }
-
-  if (!activeOrgId) {
-    return (
-      <EmptyState
-        title="No Organization Configured"
-        description="To begin managing departments, sections, teams, and employees in SHIELD, create your first organization tenant."
-        actionText="Create Organization"
-        onAction={() => router.push("/organization")}
-      />
-    );
-  }
-
-  const org = stats?.organization;
-  const counts = stats?.counts;
+  const walletAddress = user?.walletIdentities?.[0]?.walletAddress;
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              {org?.name || "Organization Overview"}
-            </h1>
-            {org?.status && (
-              <Badge
-                variant={
-                  org.status === "ACTIVE"
-                    ? "success"
-                    : org.status === "SUSPENDED"
-                    ? "warning"
-                    : "danger"
-                }
+    <div className="p-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-white">
+          {greeting}, {session.user.name?.split(" ")[0]} 👋
+        </h1>
+        <p className="text-gray-400 mt-1 text-sm">
+          Your SHIELD dashboard - identity, organizations, assets.
+        </p>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <StatCard
+          icon={<Building2 className="w-5 h-5 text-blue-400" />}
+          label="Organizations"
+          value={orgs.length}
+          accent="blue"
+        />
+        <StatCard
+          icon={<Fingerprint className="w-5 h-5 text-violet-400" />}
+          label="Identity"
+          value={walletAddress ? "Verified" : "Incomplete"}
+          accent="violet"
+        />
+        <StatCard
+          icon={<Package className="w-5 h-5 text-emerald-400" />}
+          label="Assets"
+          value="-"
+          accent="emerald"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Organizations */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Organizations</CardTitle>
+              <Link
+                href="/dashboard/orgs/new"
+                className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
               >
-                {org.status}
-              </Badge>
+                <Plus className="w-3.5 h-3.5" />
+                New
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {orgs.length === 0 ? (
+              <div className="flex flex-col items-center py-10 px-5 text-center">
+                <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-3">
+                  <Building2 className="w-6 h-6 text-blue-400" />
+                </div>
+                <p className="text-sm text-gray-300 font-medium mb-1">
+                  No organizations yet
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  Create one or accept an invitation to get started.
+                </p>
+                <Link
+                  href="/dashboard/orgs/new"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs rounded-lg hover:bg-blue-600/30 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Create organization
+                </Link>
+              </div>
+            ) : (
+              <ul className="divide-y divide-white/[0.04]">
+                {orgs.map((org) => (
+                  <li key={org.id}>
+                    <Link
+                      href={`/dashboard/orgs/${org.id}`}
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600/20 to-violet-600/20 border border-white/[0.08] flex items-center justify-center text-sm font-bold text-blue-200 shrink-0">
+                        {org.name.slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-medium truncate">
+                          {org.name}
+                        </p>
+                        <p className="text-xs text-gray-500 font-mono truncate">
+                          {org.slug}
+                        </p>
+                      </div>
+                      <Badge className={roleColor(org.role)}>
+                        {org.role}
+                      </Badge>
+                      <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent activity */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Recent Activity</CardTitle>
+              {orgs.length > 0 && (
+                <Link
+                  href={`/dashboard/orgs/${orgs[0].id}/audit`}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  View all
+                </Link>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {recentActivity.length === 0 ? (
+              <div className="flex flex-col items-center py-10 text-center">
+                <Activity className="w-8 h-8 text-gray-600 mb-2" />
+                <p className="text-sm text-gray-500">No activity yet</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-white/[0.04]">
+                {recentActivity.map((event) => (
+                  <li key={event.id} className="flex items-start gap-3 px-5 py-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-300 truncate">
+                        {event.description ?? event.eventType.replace(/_/g, " ")}
+                      </p>
+                      <p className="text-[10px] text-gray-600 mt-0.5">
+                        {relativeTime(event.createdAt)}
+                        {event.actor?.name ? ` · ${event.actor.name}` : ""}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Identity card */}
+      <Card className="mt-6">
+        <CardContent className="flex items-center gap-5 py-5">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-600/20 to-blue-600/20 border border-white/[0.08] flex items-center justify-center shrink-0">
+            <ShieldIcon className="w-6 h-6 text-violet-300" strokeWidth={1.5} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">
+              Global SHIELD Identity
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5 font-mono truncate">
+              {user?.did ?? "DID not yet generated"}
+            </p>
+            {walletAddress && (
+              <p className="text-xs text-gray-500 font-mono truncate mt-0.5">
+                Wallet: {walletAddress.slice(0, 12)}…{walletAddress.slice(-6)}
+              </p>
             )}
           </div>
-          <p className="mt-1 text-sm text-zinc-400">
-            Tenant slug: <code className="font-mono text-cyan-400">{org?.slug}</code> • Phase 0 Identity & Organizational Security
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
           <Link
-            href="/employees/new"
-            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-cyan-500/20 hover:bg-cyan-500 transition"
+            href="/dashboard/identity"
+            className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors shrink-0"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Employee
+            View identity
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
-          <Link
-            href="/organization"
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/80 px-4 py-2 text-sm font-semibold text-zinc-200 hover:bg-zinc-700 transition"
-          >
-            Org Settings
-          </Link>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard
-          title="Total Employees"
-          value={counts?.totalEmployees ?? 0}
-          subtitle="Registered personnel"
-          icon={
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          }
-        />
-
-        <StatCard
-          title="Active Employees"
-          value={counts?.activeEmployees ?? 0}
-          subtitle="Active status"
-          trend={`${counts && counts.totalEmployees > 0 ? Math.round((counts.activeEmployees / counts.totalEmployees) * 100) : 100}% active`}
-          icon={
-            <svg className="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-
-        <StatCard
-          title="Departments"
-          value={counts?.departments ?? 0}
-          subtitle="Level 1 hierarchy"
-          icon={
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          }
-        />
-
-        <StatCard
-          title="Sections"
-          value={counts?.sections ?? 0}
-          subtitle="Level 2 hierarchy"
-          icon={
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-          }
-        />
-
-        <StatCard
-          title="Teams"
-          value={counts?.teams ?? 0}
-          subtitle="Level 3 hierarchy"
-          icon={
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          }
-        />
-      </div>
-
-      {/* Quick Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Link
-          href="/organization/departments"
-          className="group rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 hover:border-cyan-500/40 hover:bg-zinc-900/80 transition"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white group-hover:text-cyan-400 transition">
-              Departments
-            </h3>
-            <span className="text-xs text-zinc-400">→</span>
-          </div>
-          <p className="mt-1 text-xs text-zinc-400">
-            Configure business units and organizational branches
-          </p>
-        </Link>
-
-        <Link
-          href="/organization/sections"
-          className="group rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 hover:border-cyan-500/40 hover:bg-zinc-900/80 transition"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white group-hover:text-cyan-400 transition">
-              Sections
-            </h3>
-            <span className="text-xs text-zinc-400">→</span>
-          </div>
-          <p className="mt-1 text-xs text-zinc-400">
-            Manage functional divisions scoped to departments
-          </p>
-        </Link>
-
-        <Link
-          href="/organization/teams"
-          className="group rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 hover:border-cyan-500/40 hover:bg-zinc-900/80 transition"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white group-hover:text-cyan-400 transition">
-              Teams
-            </h3>
-            <span className="text-xs text-zinc-400">→</span>
-          </div>
-          <p className="mt-1 text-xs text-zinc-400">
-            Define working groups and squads within sections
-          </p>
-        </Link>
-
-        <Link
-          href="/employees"
-          className="group rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 hover:border-cyan-500/40 hover:bg-zinc-900/80 transition"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white group-hover:text-cyan-400 transition">
-              Employees Directory
-            </h3>
-            <span className="text-xs text-zinc-400">→</span>
-          </div>
-          <p className="mt-1 text-xs text-zinc-400">
-            Search, filter, and assign employee records
-          </p>
-        </Link>
-      </div>
-
-      {/* Algorand Blockchain Status Widget */}
-      <BlockchainCard />
+function StatCard({
+  icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  accent: "blue" | "violet" | "emerald";
+}) {
+  const accentClasses = {
+    blue: "from-blue-600/10 to-blue-600/5 border-blue-500/10",
+    violet: "from-violet-600/10 to-violet-600/5 border-violet-500/10",
+    emerald: "from-emerald-600/10 to-emerald-600/5 border-emerald-500/10",
+  };
+  return (
+    <div
+      className={`rounded-xl bg-gradient-to-br border p-4 ${accentClasses[accent]}`}
+    >
+      <div className="flex items-center gap-2 mb-2">{icon}</div>
+      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
     </div>
   );
 }

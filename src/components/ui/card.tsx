@@ -1,0 +1,58 @@
+import { cn } from "@/lib/utils";
+
+export function Card({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-[#111118] border border-white/[0.06] rounded-xl",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CardHeader({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("px-5 py-4 border-b border-white/[0.06]", className)}>
+      {children}
+    </div>
+  );
+}
+
+export function CardContent({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={cn("px-5 py-4", className)}>{children}</div>;
+}
+
+export function CardTitle({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <h3 className={cn("text-sm font-semibold text-white", className)}>
+      {children}
+    </h3>
+  );
+}
