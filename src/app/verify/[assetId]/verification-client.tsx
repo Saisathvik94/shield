@@ -127,7 +127,7 @@ export function VerificationClient({
           <span className="text-gray-600 text-sm">/ Asset Verification</span>
         </div>
 
-        {/* Join banner — shown to unauthenticated visitors */}
+        {/* Join banner - shown to unauthenticated visitors */}
         {!isAuthenticated && (
           <div className="mb-6 rounded-2xl bg-gradient-to-br from-blue-600/10 to-violet-600/10 border border-blue-500/20 p-5 flex items-start gap-4">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center shrink-0 mt-0.5">
@@ -139,7 +139,7 @@ export function VerificationClient({
               </p>
               <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
                 This asset is managed on the SHIELD platform. Connect your
-                Pera Wallet to create a free identity — it only takes a moment.
+                Pera Wallet to create a free identity - it only takes a moment.
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
                 <Link

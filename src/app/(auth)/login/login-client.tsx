@@ -72,7 +72,7 @@ export function LoginClient({ callbackUrl }: Props) {
         router.push(destination);
         router.refresh();
       } else if (result.status === "needs_signup") {
-        // Wallet not known — show signup form
+        // Wallet not known - show signup form
         setStep("register");
       } else if (result.status === "error") {
         toast.error(result.message);
@@ -123,7 +123,7 @@ export function LoginClient({ callbackUrl }: Props) {
         <p className="text-sm text-gray-400 mt-1">Secure Identity &amp; Access Platform</p>
       </div>
 
-      {/* Context banner — shown when arriving from a QR scan */}
+      {/* Context banner - shown when arriving from a QR scan */}
       {fromVerify && step !== "signing_in" && (
         <div className="mb-4 flex items-start gap-3 rounded-xl bg-violet-500/10 border border-violet-500/20 p-4">
           <QrCode className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
@@ -145,7 +145,7 @@ export function LoginClient({ callbackUrl }: Props) {
         </div>
       )}
 
-      {/* New account notice — shown when wallet is unknown */}
+      {/* New account notice - shown when wallet is unknown */}
       {step === "register" && !fromVerify && (
         <div className="mb-4 flex items-start gap-3 rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
           <Package className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
@@ -155,7 +155,7 @@ export function LoginClient({ callbackUrl }: Props) {
             </p>
             <p className="text-xs text-amber-400/80 mt-0.5">
               This wallet address isn&apos;t linked to a SHIELD identity yet.
-              Fill in your details below to create one — it only takes a moment.
+              Fill in your details below to create one - it only takes a moment.
             </p>
           </div>
         </div>
@@ -285,7 +285,7 @@ function ConnectStep({
         <p className="text-xs text-gray-500 text-center">
           {fromVerify
             ? "New to SHIELD? We'll create your identity automatically after you connect."
-            : "New to SHIELD? Connect your wallet — we'll guide you through identity creation."}
+            : "New to SHIELD? Connect your wallet - we'll guide you through identity creation."}
         </p>
       </div>
     </div>
@@ -325,8 +325,8 @@ function RegisterStep({
         <h2 className="text-lg font-semibold text-white">Create your identity</h2>
         <p className="text-sm text-gray-400 mt-1">
           {fromVerify
-            ? `Your global SHIELD identity — one wallet, all organizations. After creation you'll be taken to asset ${verifyAssetId}.`
-            : "Your global SHIELD identity — one wallet, all organizations."}
+            ? `Your global SHIELD identity - one wallet, all organizations. After creation you'll be taken to asset ${verifyAssetId}.`
+            : "Your global SHIELD identity - one wallet, all organizations."}
         </p>
       </div>
 
