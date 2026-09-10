@@ -1,28 +1,28 @@
-import React from "react";
+import { cn } from "@/lib/utils";
 
 interface BadgeProps {
   children: React.ReactNode;
-  variant?: "success" | "warning" | "danger" | "info" | "neutral";
-  size?: "sm" | "md";
+  className?: string;
+  variant?: "default" | "success" | "warning" | "danger" | "info" | "purple";
 }
 
-export function Badge({ children, variant = "neutral", size = "md" }: BadgeProps) {
-  const variantStyles = {
-    success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-    warning: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-    danger: "bg-red-500/10 text-red-400 border-red-500/30",
-    info: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
-    neutral: "bg-zinc-800 text-zinc-300 border-zinc-700",
-  };
+const variantStyles = {
+  default: "bg-white/[0.06] text-gray-300 border-white/[0.08]",
+  success: "bg-green-500/10 text-green-400 border-green-500/20",
+  warning: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  danger:  "bg-red-500/10 text-red-400 border-red-500/20",
+  info:    "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  purple:  "bg-purple-500/10 text-purple-400 border-purple-500/20",
+};
 
-  const sizeStyles = {
-    sm: "px-2 py-0.5 text-xs",
-    md: "px-2.5 py-1 text-xs",
-  };
-
+export function Badge({ children, className, variant = "default" }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center font-medium rounded-full border ${variantStyles[variant]} ${sizeStyles[size]}`}
+      className={cn(
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border",
+        variantStyles[variant],
+        className
+      )}
     >
       {children}
     </span>
