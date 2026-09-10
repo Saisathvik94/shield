@@ -1,5 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
+import { db } from "@/db";
+import { documentVersions, approvalRequests, walletIdentities } from "@/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import {
   getAssetById,
   getAssetIpfsObjects,
@@ -7,6 +10,7 @@ import {
   getAssetAuditEvents,
 } from "@/db/queries/assets";
 import { getOrganizationMembers } from "@/db/queries/organizations";
+import { evaluateAssetRisk } from "@/lib/risk/risk-engine";
 import { AssetPassportClient } from "./asset-passport-client";
 
 interface Props {
@@ -37,13 +41,47 @@ export default async function AssetDetailPage({ params }: Props) {
     access: { user: { id: string; name: string; email: string } }[];
   };
 
-  const [ipfsObjects, blockchainRecords, auditEvents, orgMembers] =
+  const [ipfsObjects, blockchainRecords, auditEvents, orgMembers, docVersions, pendingApproval, userWallet] =
     await Promise.all([
       getAssetIpfsObjects(assetId),
       getAssetBlockchainRecords(assetId),
       getAssetAuditEvents(assetId, 20),
       getOrganizationMembers(orgId),
+      db.query.documentVersions.findMany({
+        where: eq(documentVersions.assetId, asset.id),
+        orderBy: [desc(documentVersions.versionNumber)],
+        with: { uploadedBy: true },
+      }),
+      db.query.approvalRequests.findFirst({
+        where: and(
+          eq(approvalRequests.assetId, asset.id),
+          eq(approvalRequests.status, "PENDING")
+        ),
+        with: {
+          requestedBy: true,
+          requestedCustodian: true,
+          signatures: {
+            with: {
+              approver: true,
+            },
+          },
+        },
+      }),
+      db.query.walletIdentities.findFirst({
+        where: eq(walletIdentities.userId, session.user.id),
+      }),
     ]);
+
+  let initialRiskEvaluation = null;
+  try {
+    initialRiskEvaluation = await evaluateAssetRisk({
+      assetId: asset.id,
+      organizationId: orgId,
+      persist: false,
+    });
+  } catch (e) {
+    console.error("Error computing live risk evaluation for passport:", e);
+  }
 
   const canManage = ["OWNER", "ADMIN", "MANAGER"].includes(membership.role);
   const isOwnerOrAdmin = ["OWNER", "ADMIN"].includes(membership.role);
@@ -65,6 +103,9 @@ export default async function AssetDetailPage({ params }: Props) {
       canManage={canManage}
       isOwnerOrAdmin={isOwnerOrAdmin}
       currentUserId={session.user.id}
+      currentUserWallet={userWallet?.walletAddress || null}
+      initialRiskEvaluation={initialRiskEvaluation}
+      pendingApproval={pendingApproval as any}
       asset={{
         id: asset.id,
         assetId: asset.assetId,
@@ -116,6 +157,23 @@ export default async function AssetDetailPage({ params }: Props) {
         createdAt: obj.createdAt.toISOString(),
         uploadedBy: obj.uploadedBy
           ? { name: obj.uploadedBy.name, email: obj.uploadedBy.email }
+          : null,
+      }))}
+      documentVersions={docVersions.map((v) => ({
+        id: v.id,
+        documentId: v.documentId,
+        versionNumber: v.versionNumber,
+        fileName: v.fileName,
+        mimeType: v.mimeType,
+        fileSize: v.fileSize,
+        sha256Hash: v.sha256Hash,
+        ipfsCid: v.ipfsCid,
+        changeReason: v.changeReason,
+        isCurrent: v.isCurrent,
+        blockchainTxId: v.blockchainTxId,
+        uploadedAt: v.uploadedAt.toISOString(),
+        uploadedBy: v.uploadedBy
+          ? { name: v.uploadedBy.name, email: v.uploadedBy.email }
           : null,
       }))}
       blockchainRecords={blockchainRecords.map((r) => ({

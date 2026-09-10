@@ -71,6 +71,54 @@ export const assetStatusEnum = pgEnum("asset_status", [
   "RETIRED",
 ]);
 
+export const credentialTypeEnum = pgEnum("credential_type", [
+  "ORGANIZATION_MEMBERSHIP",
+  "ROLE_ASSIGNMENT",
+  "ASSET_AUTHORIZATION",
+  "AUDITOR_AUTHORIZATION",
+]);
+
+export const credentialStatusEnum = pgEnum("credential_status", [
+  "ACTIVE",
+  "EXPIRED",
+  "REVOKED",
+  "SUSPENDED",
+]);
+
+export const approvalActionEnum = pgEnum("approval_action", [
+  "ASSET_TRANSFER",
+  "ASSET_ASSIGN",
+  "ASSET_REVOKE",
+  "ASSET_RETIRE",
+  "DOCUMENT_UPDATE",
+  "CREDENTIAL_ISSUE",
+  "CREDENTIAL_REVOKE",
+]);
+
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "PENDING",
+  "QUORUM_REACHED",
+  "EXECUTED",
+  "REJECTED",
+  "EXPIRED",
+  "CANCELLED",
+  "INVALIDATED",
+]);
+
+export const riskLevelEnum = pgEnum("risk_level", [
+  "LOW",
+  "MODERATE",
+  "ELEVATED",
+  "HIGH",
+  "CRITICAL",
+]);
+
+export const policyDecisionEnum = pgEnum("policy_decision", [
+  "ALLOW",
+  "REQUIRE_APPROVAL",
+  "BLOCK",
+]);
+
 export const auditEventTypeEnum = pgEnum("audit_event_type", [
   "USER_CREATED",
   "USER_WALLET_LINKED",
@@ -94,6 +142,25 @@ export const auditEventTypeEnum = pgEnum("audit_event_type", [
   "ACCESS_DENIED",
   "BLOCKCHAIN_TX",
   "IPFS_UPLOAD",
+  "CREDENTIAL_ISSUED",
+  "CREDENTIAL_REVOKED",
+  "CREDENTIAL_VERIFIED",
+  "DOCUMENT_VERSION_CREATED",
+  "DOCUMENT_VERSION_VERIFIED",
+  "DOCUMENT_INTEGRITY_FAILED",
+  "DOCUMENT_DOWNLOADED",
+  "ASSET_VERIFICATION_PERFORMED",
+  "APPROVAL_POLICY_CREATED",
+  "APPROVAL_POLICY_UPDATED",
+  "APPROVAL_REQUEST_CREATED",
+  "APPROVAL_SIGNED",
+  "APPROVAL_REJECTED",
+  "APPROVAL_EXPIRED",
+  "APPROVAL_QUORUM_REACHED",
+  "APPROVAL_EXECUTED",
+  "APPROVAL_INVALIDATED",
+  "APPROVAL_CANCELLED",
+  "RISK_EVALUATED",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -521,6 +588,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   custodiedAssets: many(assets, { relationName: "assetCustodian" }),
   grantedAssetAccess: many(assetAccess, { relationName: "assetAccessUser" }),
   createdAssetAccessGrants: many(assetAccess, { relationName: "assetAccessGrantedBy" }),
+  issuedCredentials: many(credentials),
+  uploadedDocumentVersions: many(documentVersions),
   auditEvents: many(auditEvents),
 }));
 
@@ -544,6 +613,8 @@ export const organizationsRelations = relations(
     memberships: many(organizationMemberships),
     departments: many(departments),
     assets: many(assets),
+    credentials: many(credentials),
+    documentVersions: many(documentVersions),
     auditEvents: many(auditEvents),
     invitations: many(invitations),
   })
@@ -649,6 +720,7 @@ export const assetsRelations = relations(assets, ({ one, many }) => ({
     relationName: "assetCustodian",
   }),
   ipfsObjects: many(ipfsObjects),
+  documentVersions: many(documentVersions),
   access: many(assetAccess),
 }));
 
@@ -830,6 +902,227 @@ export const blockchainRecords = pgTable(
   ]
 );
 
+export const credentials = pgTable(
+  "credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    type: credentialTypeEnum("type").notNull(),
+    issuerDid: text("issuer_did").notNull(),
+    subjectDid: text("subject_did").notNull(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    issuedById: uuid("issued_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    claims: text("claims").notNull(), // Canonical JSON string of claims
+    status: credentialStatusEnum("status").notNull().default("ACTIVE"),
+    credentialHash: text("credential_hash").notNull(),
+    signature: text("signature"),
+    blockchainTxId: text("blockchain_tx_id"),
+    issuedAt: timestamp("issued_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revocationReason: text("revocation_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("credential_org_idx").on(t.organizationId),
+    index("credential_subject_idx").on(t.subjectDid),
+    index("credential_issuer_idx").on(t.issuerDid),
+    uniqueIndex("credential_hash_idx").on(t.credentialHash),
+  ]
+);
+
+export const documentVersions = pgTable(
+  "document_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: text("document_id").notNull(), // Logical document identifier
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull().default(1),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    sha256Hash: text("sha256_hash").notNull(),
+    ipfsCid: text("ipfs_cid").notNull(),
+    uploadedById: uuid("uploaded_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    changeReason: text("change_reason"),
+    isCurrent: boolean("is_current").notNull().default(true),
+    blockchainTxId: text("blockchain_tx_id"),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("doc_ver_unique_idx").on(t.assetId, t.documentId, t.versionNumber),
+    index("doc_ver_asset_current_idx").on(t.assetId, t.isCurrent),
+    index("doc_ver_org_idx").on(t.organizationId),
+    index("doc_ver_hash_idx").on(t.sha256Hash),
+    index("doc_ver_cid_idx").on(t.ipfsCid),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// P1: Multi-Party Approvals & Policies
+// ---------------------------------------------------------------------------
+
+export const approvalPolicies = pgTable(
+  "approval_policies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    action: approvalActionEnum("action").notNull(),
+    assetClassification: assetClassificationEnum("asset_classification"),
+    requiredApprovals: integer("required_approvals").notNull().default(2),
+    // JSON array of roles: ["OWNER", "ADMIN", "MANAGER"]
+    eligibleRoles: text("eligible_roles").notNull().default("[]"),
+    // Optional JSON array of specific user UUIDs
+    eligibleUserIds: text("eligible_user_ids"),
+    approvalExpiryHours: integer("approval_expiry_hours").notNull().default(48),
+    allowSelfApproval: boolean("allow_self_approval").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("policy_org_idx").on(t.organizationId),
+    index("policy_action_idx").on(t.action),
+  ]
+);
+
+export const approvalRequests = pgTable(
+  "approval_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id").references(() => assets.id, { onDelete: "cascade" }),
+    action: approvalActionEnum("action").notNull(),
+    policyId: uuid("policy_id").references(() => approvalPolicies.id, {
+      onDelete: "set null",
+    }),
+    requestedById: uuid("requested_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetSubjectId: text("target_subject_id"),
+    currentAssetState: text("current_asset_state"),
+    currentCustodianId: uuid("current_custodian_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    requestedCustodianId: uuid("requested_custodian_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    assetVersion: integer("asset_version").notNull().default(1),
+    actionPayload: text("action_payload").notNull(),
+    actionDigest: text("action_digest").notNull(),
+    requiredApprovals: integer("required_approvals").notNull().default(2),
+    status: approvalStatusEnum("status").notNull().default("PENDING"),
+    rejectionReason: text("rejection_reason"),
+    rejectedById: uuid("rejected_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    blockchainTxId: text("blockchain_tx_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("approval_org_idx").on(t.organizationId),
+    index("approval_asset_idx").on(t.assetId),
+    index("approval_status_idx").on(t.status),
+    index("approval_digest_idx").on(t.actionDigest),
+  ]
+);
+
+export const approvalSignatures = pgTable(
+  "approval_signatures",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    approvalRequestId: uuid("approval_request_id")
+      .notNull()
+      .references(() => approvalRequests.id, { onDelete: "cascade" }),
+    approverId: uuid("approver_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    approverDid: text("approver_did").notNull(),
+    approverWallet: text("approver_wallet").notNull(),
+    signature: text("signature").notNull(),
+    actionDigest: text("action_digest").notNull(),
+    signedAt: timestamp("signed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("approval_sig_unique_idx").on(t.approvalRequestId, t.approverId),
+    index("approval_sig_request_idx").on(t.approvalRequestId),
+    index("approval_sig_approver_idx").on(t.approverId),
+  ]
+);
+
+export const riskAssessments = pgTable(
+  "risk_assessments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    riskScore: integer("risk_score").notNull(),
+    riskLevel: riskLevelEnum("risk_level").notNull(),
+    decision: policyDecisionEnum("decision").notNull(),
+    recommendedQuorum: integer("recommended_quorum").notNull().default(1),
+    signalsBreakdown: text("signals_breakdown").notNull(),
+    evaluatedById: uuid("evaluated_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    evaluatedAt: timestamp("evaluated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("risk_org_idx").on(t.organizationId),
+    index("risk_asset_idx").on(t.assetId),
+    index("risk_level_idx").on(t.riskLevel),
+  ]
+);
+
 // Relations for new tables
 export const ipfsObjectsRelations = relations(ipfsObjects, ({ one }) => ({
   uploadedBy: one(users, {
@@ -860,7 +1153,123 @@ export const blockchainRecordsRelations = relations(
   })
 );
 
+export const credentialsRelations = relations(credentials, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [credentials.organizationId],
+    references: [organizations.id],
+  }),
+  issuedBy: one(users, {
+    fields: [credentials.issuedById],
+    references: [users.id],
+  }),
+}));
+
+export const documentVersionsRelations = relations(documentVersions, ({ one }) => ({
+  asset: one(assets, {
+    fields: [documentVersions.assetId],
+    references: [assets.id],
+  }),
+  organization: one(organizations, {
+    fields: [documentVersions.organizationId],
+    references: [organizations.id],
+  }),
+  uploadedBy: one(users, {
+    fields: [documentVersions.uploadedById],
+    references: [users.id],
+  }),
+}));
+
 export type IpfsObject = typeof ipfsObjects.$inferSelect;
 export type NewIpfsObject = typeof ipfsObjects.$inferInsert;
 export type BlockchainRecord = typeof blockchainRecords.$inferSelect;
 export type NewBlockchainRecord = typeof blockchainRecords.$inferInsert;
+export type Credential = typeof credentials.$inferSelect;
+export type NewCredential = typeof credentials.$inferInsert;
+export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type NewDocumentVersion = typeof documentVersions.$inferInsert;
+
+export const approvalPoliciesRelations = relations(
+  approvalPolicies,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [approvalPolicies.organizationId],
+      references: [organizations.id],
+    }),
+  })
+);
+
+export const approvalRequestsRelations = relations(
+  approvalRequests,
+  ({ one, many }) => ({
+    organization: one(organizations, {
+      fields: [approvalRequests.organizationId],
+      references: [organizations.id],
+    }),
+    asset: one(assets, {
+      fields: [approvalRequests.assetId],
+      references: [assets.id],
+    }),
+    policy: one(approvalPolicies, {
+      fields: [approvalRequests.policyId],
+      references: [approvalPolicies.id],
+    }),
+    requestedBy: one(users, {
+      fields: [approvalRequests.requestedById],
+      references: [users.id],
+    }),
+    currentCustodian: one(users, {
+      fields: [approvalRequests.currentCustodianId],
+      references: [users.id],
+    }),
+    requestedCustodian: one(users, {
+      fields: [approvalRequests.requestedCustodianId],
+      references: [users.id],
+    }),
+    rejectedBy: one(users, {
+      fields: [approvalRequests.rejectedById],
+      references: [users.id],
+    }),
+    signatures: many(approvalSignatures),
+  })
+);
+
+export const approvalSignaturesRelations = relations(
+  approvalSignatures,
+  ({ one }) => ({
+    approvalRequest: one(approvalRequests, {
+      fields: [approvalSignatures.approvalRequestId],
+      references: [approvalRequests.id],
+    }),
+    approver: one(users, {
+      fields: [approvalSignatures.approverId],
+      references: [users.id],
+    }),
+  })
+);
+
+export const riskAssessmentsRelations = relations(
+  riskAssessments,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [riskAssessments.organizationId],
+      references: [organizations.id],
+    }),
+    asset: one(assets, {
+      fields: [riskAssessments.assetId],
+      references: [assets.id],
+    }),
+    evaluatedBy: one(users, {
+      fields: [riskAssessments.evaluatedById],
+      references: [users.id],
+    }),
+  })
+);
+
+export type ApprovalPolicy = typeof approvalPolicies.$inferSelect;
+export type NewApprovalPolicy = typeof approvalPolicies.$inferInsert;
+export type ApprovalRequest = typeof approvalRequests.$inferSelect;
+export type NewApprovalRequest = typeof approvalRequests.$inferInsert;
+export type ApprovalSignature = typeof approvalSignatures.$inferSelect;
+export type NewApprovalSignature = typeof approvalSignatures.$inferInsert;
+export type RiskAssessment = typeof riskAssessments.$inferSelect;
+export type NewRiskAssessment = typeof riskAssessments.$inferInsert;

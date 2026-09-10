@@ -11,6 +11,8 @@ import {
   Package,
   ScrollText,
   Fingerprint,
+  Award,
+  ShieldCheck,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -228,15 +230,27 @@ export function Sidebar({ orgs, activeOrgId, userName, userEmail }: SidebarProps
             </div>
           )}
 
-          {/* Personal Identity */}
+          {/* Personal Identity & Credentials */}
           <div className="space-y-0.5">
             <div className="px-2 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-              Identity & Wallets
+              Trust & Governance
             </div>
+            <SidebarNavItem
+              href="/dashboard/approvals"
+              icon={ShieldCheck}
+              label="Multi-Party Approvals"
+              active={isActive("/dashboard/approvals")}
+            />
+            <SidebarNavItem
+              href="/dashboard/credentials"
+              icon={Award}
+              label="Verifiable Credentials"
+              active={isActive("/dashboard/credentials")}
+            />
             <SidebarNavItem
               href="/dashboard/identity"
               icon={Fingerprint}
-              label="My Identity"
+              label="My Identity & Keys"
               active={isActive("/dashboard/identity")}
             />
           </div>

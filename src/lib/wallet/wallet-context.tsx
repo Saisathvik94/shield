@@ -8,6 +8,12 @@ import React, {
   useState,
 } from "react";
 import { getPeraWallet, resetPeraWallet } from "./pera-client";
+import type { SignerTransaction } from "@perawallet/connect";
+
+export interface SignDataInput {
+  data: Uint8Array;
+  message: string;
+}
 
 interface WalletContextValue {
   /** Currently connected Algorand address, or null */
@@ -16,14 +22,18 @@ interface WalletContextValue {
   connecting: boolean;
   /** True once the wallet has been initialised (reconnect attempted) */
   ready: boolean;
+  /** True if address is present */
+  isConnected: boolean;
   connect: () => Promise<string | null>;
   disconnect: () => Promise<void>;
+  signData?: (data: SignDataInput[], signerAddress: string) => Promise<Uint8Array[]>;
 }
 
 const WalletContext = createContext<WalletContextValue>({
   address: null,
   connecting: false,
   ready: false,
+  isConnected: false,
   connect: async () => null,
   disconnect: async () => {},
 });
@@ -103,8 +113,28 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const signData = useCallback(
+    async (data: SignDataInput[], signerAddress: string): Promise<Uint8Array[]> => {
+      const pera = await getPeraWallet();
+      return pera.signData(data as any, signerAddress);
+    },
+    []
+  );
+
+  const isConnected = !!address;
+
   return (
-    <WalletContext.Provider value={{ address, connecting, ready, connect, disconnect }}>
+    <WalletContext.Provider
+      value={{
+        address,
+        connecting,
+        ready,
+        isConnected,
+        connect,
+        disconnect,
+        signData,
+      }}
+    >
       {children}
     </WalletContext.Provider>
   );

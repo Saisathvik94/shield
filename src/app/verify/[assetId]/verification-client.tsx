@@ -1,6 +1,8 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import QRCode from "qrcode";
 import {
   ShieldCheck,
   ShieldAlert,
@@ -8,8 +10,6 @@ import {
   Package,
   Building2,
   User,
-  MapPin,
-  Hash,
   Calendar,
   ExternalLink,
   CheckCircle2,
@@ -20,130 +20,130 @@ import {
   Fingerprint,
   Layers,
   Activity,
-  ArrowRight,
+  QrCode,
+  Download,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import { classificationColor, relativeTime, cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { TechnicalDetails } from "@/components/ui/technical-details";
-import { CopyButton } from "@/components/dashboard/copy-button";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface AssetInfo {
-  id: string;
-  assetId: string;
-  name: string;
-  description: string | null;
-  assetType: string;
-  classification: string;
-  status: string;
-  location: string | null;
-  physicalIdentifier: string | null;
-  algorandAssetId: string | null;
-  blockchainTxId: string | null;
-  ipfsCid: string | null;
-  createdAt: string;
-  updatedAt: string;
-  organization: { name: string; slug: string };
-  owner: { name: string } | null;
-  custodian: { name: string } | null;
-  department: string | null;
-  section: string | null;
-}
-
-interface OnChainInfo {
-  assetId: string;
-  name: string;
-  unitName: string;
-  total: number;
-  creator: string;
-  manager: string | null;
-  url: string | null;
-  createdAtRound: number | null;
-  deleted: boolean;
-}
-
-interface BlockchainRecord {
-  txId: string;
-  confirmedRound: string | null;
-  recordType: string;
-  network: string;
-  createdAt: string;
-}
+import { classificationColor, copyWithToast, cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import type { AdvancedAssetVerificationResult, VerificationCheckPoint } from "@/lib/verification/asset-verifier";
 
 interface Props {
   assetId: string;
-  verificationStatus: "verified" | "partial" | "unregistered";
-  isConsistent: boolean;
-  indexerError: boolean;
+  verificationResult: AdvancedAssetVerificationResult;
   isAuthenticated: boolean;
-  asset: AssetInfo;
-  onChainInfo: OnChainInfo | null;
-  blockchainRecords: BlockchainRecord[];
 }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function VerificationClient({
   assetId,
-  verificationStatus,
-  isConsistent,
-  indexerError,
+  verificationResult,
   isAuthenticated,
-  asset,
-  onChainInfo,
-  blockchainRecords,
 }: Props) {
-  const cls = classificationColor(asset.classification);
+  const { overallStatus, trustScore, points, assetSummary, verifiedAt } = verificationResult;
+  const [expandedPoint, setExpandedPoint] = useState<string | null>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [copiedText, setCopiedText] = useState<string | null>(null);
 
-  const technicalItems = [
-    { label: "Asset Identifier", value: asset.assetId, copyable: true },
-    ...(asset.algorandAssetId
-      ? [
-          {
-            label: "Algorand ASA Index",
-            value: asset.algorandAssetId,
-            copyable: true,
-            href: `https://testnet.explorer.perawallet.app/asset/${asset.algorandAssetId}`,
-          },
-        ]
-      : []),
-    ...(asset.blockchainTxId
-      ? [
-          {
-            label: "Anchor Transaction ID",
-            value: asset.blockchainTxId,
-            copyable: true,
-            href: `https://testnet.explorer.perawallet.app/tx/${asset.blockchainTxId}`,
-          },
-        ]
-      : []),
-    ...(asset.ipfsCid
-      ? [
-          {
-            label: "IPFS Document CID",
-            value: asset.ipfsCid,
-            copyable: true,
-            href: `https://ipfs.io/ipfs/${asset.ipfsCid}`,
-          },
-        ]
-      : []),
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = window.location.href;
+      QRCode.toDataURL(url, { width: 280, margin: 2 })
+        .then(setQrDataUrl)
+        .catch(console.error);
+    }
+  }, []);
+
+  const handleCopy = (text: string, id: string) => {
+    copyWithToast(text, "Verification Data");
+    setCopiedText(id);
+    setTimeout(() => setCopiedText(null), 2000);
+  };
+
+  const handleDownloadCertificate = () => {
+    const cert = {
+      title: "SHIELD Verifiable Trust Certificate",
+      assetId: assetSummary?.assetId || assetId,
+      assetName: assetSummary?.name,
+      organization: assetSummary?.organizationName,
+      trustScore: `${trustScore}%`,
+      status: overallStatus,
+      verifiedAt,
+      verificationEngine: "SHIELD-P0-Engine-v1.0",
+      blockchainTxId: assetSummary?.blockchainTxId,
+      ipfsCid: assetSummary?.ipfsCid,
+      points,
+    };
+    const blob = new Blob([JSON.stringify(cert, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `shield-verification-${assetSummary?.assetId || assetId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const statusConfig = {
+    TRUSTED: {
+      color: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-500/10 border-emerald-500/25",
+      badgeBg: "bg-emerald-500 text-white",
+      icon: ShieldCheck,
+      headline: "Cryptographically Verified & Trusted",
+      subline: "All 7 verification checkpoints passed with immutable on-chain consensus.",
+    },
+    WARNING: {
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-500/10 border-amber-500/25",
+      badgeBg: "bg-amber-500 text-white",
+      icon: AlertTriangle,
+      headline: "Partial Verification / Warning Flags",
+      subline: "Some non-critical verification checkpoints require administrator review.",
+    },
+    COMPROMISED: {
+      color: "text-rose-600 dark:text-rose-400",
+      bg: "bg-rose-500/10 border-rose-500/25",
+      badgeBg: "bg-rose-500 text-white",
+      icon: ShieldAlert,
+      headline: "Verification Compromised / Tamper Detected",
+      subline: "Critical verification failure detected (asset revoked or hash mismatch).",
+    },
+    NOT_FOUND: {
+      color: "text-slate-500",
+      bg: "bg-slate-500/10 border-slate-500/25",
+      badgeBg: "bg-slate-500 text-white",
+      icon: XCircle,
+      headline: "Asset Not Found",
+      subline: "No record found in the SHIELD registry.",
+    },
+  }[overallStatus];
+
+  const StatusIcon = statusConfig.icon;
+
+  const pointsList: VerificationCheckPoint[] = [
+    points.registry,
+    points.blockchainAnchor,
+    points.asaConsensus,
+    points.metadataParity,
+    points.lifecycleState,
+    points.custodyConsistency,
+    points.documentIntegrity,
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#090a10] px-4 py-12 text-slate-800 dark:text-slate-200 transition-colors">
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* SHIELD Global Branding */}
+    <div className="min-h-screen bg-slate-50 dark:bg-[#090a10] px-4 py-10 text-slate-800 dark:text-slate-200 transition-colors">
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Header Branding */}
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-blue-600 shadow-md shadow-blue-500/20">
               <Shield className="w-4 h-4 text-white" strokeWidth={2} />
             </div>
             <span className="font-bold text-slate-900 dark:text-white tracking-tight">SHIELD</span>
-            <span className="text-slate-500 text-xs hidden sm:inline">/ Public Asset Verification</span>
+            <span className="text-slate-500 text-xs hidden sm:inline">/ Verifiable Trust Portal</span>
           </Link>
 
           <div className="flex items-center gap-3">
@@ -159,424 +159,277 @@ export function VerificationClient({
           </div>
         </div>
 
-        {/* Verification Status Verdict Banner */}
-        <VerificationVerdictBanner
-          status={verificationStatus}
-          isConsistent={isConsistent}
-          indexerError={indexerError}
-          assetId={assetId}
-          isRevoked={asset.status === "REVOKED" || asset.status === "RETIRED"}
-        />
-
-        {/* Asset Passport Card */}
-        <div className="rounded-2xl bg-white dark:bg-[#0f1017] border border-slate-200 dark:border-white/[0.08] overflow-hidden shadow-sm dark:shadow-xl">
-          {/* Classification accent bar */}
-          <div
-            className={cn(
-              "h-1.5 w-full",
-              asset.classification === "CRITICAL"
-                ? "bg-rose-500"
-                : asset.classification === "SECRET"
-                ? "bg-amber-500"
-                : asset.classification === "CONFIDENTIAL"
-                ? "bg-blue-500"
-                : "bg-slate-500"
-            )}
-          />
-
-          <div className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-                <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+        {/* Verification Status Banner */}
+        <div className={cn("p-6 rounded-3xl border shadow-sm space-y-4", statusConfig.bg)}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-2xl bg-white dark:bg-black/30 shadow-xs">
+                <StatusIcon className={cn("w-7 h-7", statusConfig.color)} />
               </div>
-              <div className="space-y-1 min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-lg font-bold text-slate-900 dark:text-white font-mono">{asset.assetId}</span>
-                  <span className={cn("text-xs px-2.5 py-0.5 rounded-md font-semibold", cls.className)}>
-                    {cls.label}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={cn("px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase", statusConfig.badgeBg)}>
+                    {overallStatus}
                   </span>
-                  <StatusBadge status={asset.status} />
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Verified: {new Date(verifiedAt).toLocaleTimeString()}
+                  </span>
                 </div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">{asset.name}</h1>
-                {asset.description && (
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed pt-1">{asset.description}</p>
+                <h1 className="text-lg font-bold text-slate-900 dark:text-white mt-1">
+                  {statusConfig.headline}
+                </h1>
+              </div>
+            </div>
+
+            {/* Trust Score Indicator */}
+            <div className="flex items-center sm:flex-col items-end gap-1 shrink-0">
+              <div className="text-3xl font-black text-slate-900 dark:text-white">
+                {trustScore}<span className="text-sm font-semibold text-slate-500 dark:text-slate-400">/100</span>
+              </div>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Trust Score</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-600 dark:text-slate-400">
+            {statusConfig.subline}
+          </p>
+
+          {/* Action Buttons */}
+          <div className="pt-2 flex flex-wrap items-center gap-2 border-t border-slate-200/50 dark:border-white/[0.06]">
+            <button
+              onClick={() => setQrModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.1] text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.1] transition-colors shadow-2xs"
+            >
+              <QrCode className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              QR Code
+            </button>
+            <button
+              onClick={handleDownloadCertificate}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.1] text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.1] transition-colors shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              Evidence Certificate (JSON)
+            </button>
+            {assetSummary?.blockchainTxId && (
+              <a
+                href={`https://testnet.explorer.perawallet.app/tx/${assetSummary.blockchainTxId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-2xs ml-auto"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Algorand TestNet
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Asset Summary Card */}
+        {assetSummary && (
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#0c0d14] border border-slate-200 dark:border-white/[0.06] shadow-xs space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
+                    {assetSummary.assetId}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wider uppercase bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                    {assetSummary.assetType}
+                  </span>
+                  <span className={cn("px-2 py-0.5 rounded text-[10px] font-semibold tracking-wider uppercase", classificationColor(assetSummary.classification))}>
+                    {assetSummary.classification}
+                  </span>
+                </div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white mt-1">
+                  {assetSummary.name}
+                </h2>
+                {assetSummary.description && (
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    {assetSummary.description}
+                  </p>
                 )}
               </div>
+
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/[0.06]">
+                {assetSummary.organizationName}
+              </span>
+            </div>
+
+            {/* Cryptographic Identifiers */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-100 dark:border-white/[0.04] text-xs">
+              {assetSummary.blockchainTxId && (
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04] space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Blockchain Anchor TX:</span>
+                  <div className="flex items-center justify-between font-mono text-[11px] text-slate-900 dark:text-white">
+                    <span className="truncate">{assetSummary.blockchainTxId}</span>
+                    <button
+                      onClick={() => handleCopy(assetSummary.blockchainTxId!, "txid")}
+                      className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    >
+                      {copiedText === "txid" ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {assetSummary.ipfsCid && (
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04] space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">IPFS Immutable CID:</span>
+                  <div className="flex items-center justify-between font-mono text-[11px] text-slate-900 dark:text-white">
+                    <span className="truncate">{assetSummary.ipfsCid}</span>
+                    <button
+                      onClick={() => handleCopy(assetSummary.ipfsCid!, "cid")}
+                      className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    >
+                      {copiedText === "cid" ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+        )}
 
-          {/* Metadata Rows */}
-          <div className="border-t border-slate-100 dark:border-white/[0.06] p-6 grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
-            <MetaRow icon={<Building2 className="w-3.5 h-3.5" />} label="Organization">
-              <span className="font-semibold text-slate-900 dark:text-white">{asset.organization.name}</span>
-            </MetaRow>
-            <MetaRow icon={<Package className="w-3.5 h-3.5" />} label="Asset Type">
-              <span className="font-medium text-slate-900 dark:text-white">{asset.assetType.replace(/_/g, " ")}</span>
-            </MetaRow>
-            {asset.department && (
-              <MetaRow icon={<Layers className="w-3.5 h-3.5" />} label="Department">
-                <span className="font-medium text-slate-900 dark:text-white">
-                  {asset.department}
-                  {asset.section && <span className="text-slate-500 font-normal"> → {asset.section}</span>}
-                </span>
-              </MetaRow>
-            )}
-            {asset.owner && (
-              <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Assigned Owner">
-                <span className="font-medium text-slate-900 dark:text-white">{asset.owner.name}</span>
-              </MetaRow>
-            )}
-            {asset.custodian && (
-              <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Active Custodian">
-                <span className="font-medium text-slate-900 dark:text-white">{asset.custodian.name}</span>
-              </MetaRow>
-            )}
-            {asset.location && (
-              <MetaRow icon={<MapPin className="w-3.5 h-3.5" />} label="Physical Location">
-                <span className="font-medium text-slate-900 dark:text-white">{asset.location}</span>
-              </MetaRow>
-            )}
-            {asset.physicalIdentifier && (
-              <MetaRow icon={<Hash className="w-3.5 h-3.5" />} label="Physical Tag">
-                <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">{asset.physicalIdentifier}</span>
-              </MetaRow>
-            )}
-            <MetaRow icon={<Calendar className="w-3.5 h-3.5" />} label="Registered Date">
-              <span className="text-slate-500 dark:text-slate-400">{relativeTime(asset.createdAt)}</span>
-            </MetaRow>
+        {/* 7-Point Verification Checkpoints Breakdown */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+              7-Point Cryptographic Verification Engine
+            </h3>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {pointsList.filter((p) => p.status === "PASSED").length} of 7 Passed
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {pointsList.map((point) => {
+              const isExpanded = expandedPoint === point.id;
+              const pointStatus = {
+                PASSED: {
+                  icon: CheckCircle2,
+                  color: "text-emerald-500",
+                  badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+                },
+                WARNING: {
+                  icon: AlertTriangle,
+                  color: "text-amber-500",
+                  badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+                },
+                FAILED: {
+                  icon: XCircle,
+                  color: "text-rose-500",
+                  badge: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+                },
+                SKIPPED: {
+                  icon: Clock,
+                  color: "text-slate-400",
+                  badge: "bg-slate-500/10 text-slate-500 border-slate-500/20",
+                },
+              }[point.status];
+
+              const PIcon = pointStatus.icon;
+
+              return (
+                <div
+                  key={point.id}
+                  className="rounded-2xl bg-white dark:bg-[#0c0d14] border border-slate-200 dark:border-white/[0.06] overflow-hidden shadow-xs transition-all"
+                >
+                  <button
+                    onClick={() => setExpandedPoint(isExpanded ? null : point.id)}
+                    className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <PIcon className={cn("w-5 h-5 shrink-0", pointStatus.color)} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">
+                            {point.name}
+                          </span>
+                          <span className={cn("px-2 py-0.5 rounded text-[10px] font-semibold uppercase border", pointStatus.badge)}>
+                            {point.status}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          {point.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      )}
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/[0.04] bg-slate-50/40 dark:bg-black/20 text-xs space-y-2">
+                      {point.errorMessage && (
+                        <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400">
+                          {point.errorMessage}
+                        </div>
+                      )}
+                      <div className="font-semibold text-slate-700 dark:text-slate-300">
+                        Technical Evidence &amp; Verification Details:
+                      </div>
+                      <pre className="p-3 rounded-xl bg-slate-900 text-slate-100 dark:bg-black/50 text-[11px] font-mono overflow-x-auto border border-white/[0.06]">
+                        {JSON.stringify(point.details, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
-
-        {/* 5-Point Trust & Integrity Checklist */}
-        <ChecklistCard
-          hasDbRecord={true}
-          hasBlockchainAnchor={blockchainRecords.length > 0}
-          hasOnChainAsset={!!onChainInfo && !onChainInfo.deleted}
-          isConsistent={isConsistent}
-          indexerError={indexerError}
-          assetRevoked={asset.status === "REVOKED" || asset.status === "RETIRED"}
-        />
-
-        {/* Live Algorand Ledger Inspection */}
-        {onChainInfo && (
-          <AlgorandLiveCard info={onChainInfo} isConsistent={isConsistent} />
-        )}
-
-        {/* Technical Details & Proofs */}
-        <TechnicalDetails
-          title="Cryptographic Proofs & Blockchain Hashes"
-          description="Direct on-chain references for independent verification."
-          items={technicalItems}
-        />
-
-        {/* Unauthenticated Onboarding Prompt */}
-        {!isAuthenticated && (
-          <div className="rounded-2xl bg-blue-50 dark:bg-blue-500/[0.04] border border-blue-200 dark:border-blue-500/20 p-5 flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div className="space-y-1.5 flex-1 min-w-0">
-              <p className="text-xs font-semibold text-slate-900 dark:text-white">
-                Verify and manage institutional assets with SHIELD
-              </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Connect your Algorand wallet to access digital identity credentials, manage authorized assets, and perform tamper-proof transfers.
-              </p>
-              <div className="pt-2">
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-all shadow-sm"
-                >
-                  <span>Connect Wallet Identity</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Footer */}
-        <div className="pt-4 text-center space-y-1">
-          <p className="text-xs text-slate-500">
-            Cryptographically anchored on Algorand TestNet · IPFS Decentralized Storage
-          </p>
-          <p className="text-[11px] text-slate-500 dark:text-slate-600">
-            Verified by{" "}
-            <Link href="/" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-              SHIELD Enterprise Trust Platform
-            </Link>
-          </p>
+        <div className="text-center text-xs text-slate-500 dark:text-slate-400 pt-4">
+          SHIELD Verifiable Trust Infrastructure • Immutable Algorand Proof Protocol
         </div>
       </div>
-    </div>
-  );
-}
 
-// ─── Verification Verdict Banner ──────────────────────────────────────────────
+      {/* QR Code Modal */}
+      {qrModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in-0 duration-150">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#12131d] border border-slate-200 dark:border-white/[0.08] shadow-2xl p-6 text-center space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Verification QR Code
+              </h3>
+              <button
+                onClick={() => setQrModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
 
-function VerificationVerdictBanner({
-  status,
-  isConsistent,
-  indexerError,
-  assetId,
-  isRevoked,
-}: {
-  status: "verified" | "partial" | "unregistered";
-  isConsistent: boolean;
-  indexerError: boolean;
-  assetId: string;
-  isRevoked: boolean;
-}) {
-  if (isRevoked) {
-    return (
-      <div className="flex items-start gap-3.5 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/25 p-5">
-        <XCircle className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-semibold text-rose-900 dark:text-rose-300 text-base">
-            Asset Decommissioned or Revoked
-          </p>
-          <p className="text-xs text-rose-700 dark:text-rose-400/90 leading-relaxed">
-            <span className="font-mono font-bold text-slate-900 dark:text-white">{assetId}</span> is marked as retired or revoked in the SHIELD registry. This asset should no longer be treated as operational.
-          </p>
-        </div>
-      </div>
-    );
-  }
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Scan this QR code with any mobile camera to instantly verify this asset on the SHIELD network.
+            </p>
 
-  if (status === "verified" && isConsistent) {
-    return (
-      <div className="flex items-start gap-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 p-5">
-        <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-semibold text-emerald-900 dark:text-emerald-300 text-base">
-            Authenticity &amp; Integrity Verified
-          </p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
-            <span className="font-mono font-bold text-slate-900 dark:text-white">{assetId}</span> is anchored on the Algorand blockchain. Ownership, lifecycle state, and cryptographic proofs are authentic.
-          </p>
-        </div>
-      </div>
-    );
-  }
+            {qrDataUrl && (
+              <div className="p-4 bg-white rounded-2xl inline-block shadow-xs border border-slate-200">
+                <img src={qrDataUrl} alt="Asset Verification QR Code" className="w-48 h-48 mx-auto" />
+              </div>
+            )}
 
-  if (status === "partial") {
-    return (
-      <div className="flex items-start gap-3.5 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 p-5">
-        <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-semibold text-amber-900 dark:text-amber-300 text-base">
-            Partial Verification
-          </p>
-          <p className="text-xs text-amber-700 dark:text-amber-400/90 leading-relaxed">
-            This asset exists in the institutional registry with recorded transactions, but live on-chain tokenization could not be fully matched.
-            {indexerError && " (Algorand Indexer temporary response timeout)"}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-start gap-3.5 rounded-2xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/25 p-5">
-      <Fingerprint className="w-6 h-6 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-      <div className="space-y-1">
-        <p className="font-semibold text-blue-900 dark:text-blue-300 text-base">
-          Registered in SHIELD Institutional Registry
-        </p>
-        <p className="text-xs text-blue-700 dark:text-blue-400/90 leading-relaxed">
-          <span className="font-mono font-bold text-slate-900 dark:text-white">{assetId}</span> has a valid organizational record. Tokenization to Algorand is currently pending.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─── 5-Point Verification Checklist ───────────────────────────────────────────
-
-function ChecklistCard({
-  hasDbRecord,
-  hasBlockchainAnchor,
-  hasOnChainAsset,
-  isConsistent,
-  indexerError,
-  assetRevoked,
-}: {
-  hasDbRecord: boolean;
-  hasBlockchainAnchor: boolean;
-  hasOnChainAsset: boolean;
-  isConsistent: boolean;
-  indexerError: boolean;
-  assetRevoked: boolean;
-}) {
-  const checks: Array<{
-    label: string;
-    status: "pass" | "fail" | "warn" | "skip";
-    detail: string;
-  }> = [
-    {
-      label: "Institutional Database Registry",
-      status: hasDbRecord ? "pass" : "fail",
-      detail: hasDbRecord
-        ? "Verified organization record found in SHIELD database."
-        : "No registered record found.",
-    },
-    {
-      label: "Algorand Blockchain Anchor",
-      status: hasBlockchainAnchor ? "pass" : "warn",
-      detail: hasBlockchainAnchor
-        ? "Cryptographic transactions confirm immutable state anchoring."
-        : "No blockchain anchor found yet.",
-    },
-    {
-      label: "Live Algorand ASA Status",
-      status: indexerError ? "skip" : hasOnChainAsset ? "pass" : "warn",
-      detail: indexerError
-        ? "Indexer timeout - verified from cached consensus records."
-        : hasOnChainAsset
-        ? "Active Algorand Standard Asset (ASA) live on TestNet."
-        : "ASA token has not been minted yet.",
-    },
-    {
-      label: "Metadata Consistency Check",
-      status: !hasOnChainAsset ? "skip" : isConsistent ? "pass" : "fail",
-      detail: !hasOnChainAsset
-        ? "Skipped - asset not yet tokenized."
-        : isConsistent
-        ? "On-chain metadata matches registry parameters exactly."
-        : "Checksum discrepancy detected between on-chain ASA and registry.",
-    },
-    {
-      label: "Lifecycle State Validity",
-      status: assetRevoked ? "fail" : "pass",
-      detail: assetRevoked
-        ? "Asset is revoked or decommissioned."
-        : "Asset is active, registered, and valid.",
-    },
-  ];
-
-  return (
-    <div className="rounded-2xl bg-white dark:bg-[#0f1017] border border-slate-200 dark:border-white/[0.08] overflow-hidden shadow-sm dark:shadow-none">
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          <h2 className="text-xs font-bold text-slate-900 dark:text-white">Trust &amp; Verification Checklist</h2>
-        </div>
-        <span className="text-[11px] text-slate-500">5-point integrity audit</span>
-      </div>
-      <div className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-        {checks.map((check) => (
-          <div key={check.label} className="flex items-start gap-3.5 px-5 py-3.5">
-            <CheckIcon status={check.status} />
-            <div className="flex-1 min-w-0 space-y-0.5">
-              <p className="text-xs font-semibold text-slate-900 dark:text-white">{check.label}</p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">{check.detail}</p>
+            <div className="pt-2">
+              <a
+                href={qrDataUrl}
+                download={`shield-qr-${assetSummary?.assetId || assetId}.png`}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-colors w-full justify-center"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download QR Code Image
+              </a>
             </div>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Live Algorand Card ───────────────────────────────────────────────────────
-
-function AlgorandLiveCard({
-  info,
-  isConsistent,
-}: {
-  info: OnChainInfo;
-  isConsistent: boolean;
-}) {
-  return (
-    <div className="rounded-2xl bg-white dark:bg-[#0f1017] border border-slate-200 dark:border-white/[0.08] overflow-hidden shadow-sm dark:shadow-none">
-      <div className="px-5 py-3.5 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          <h2 className="text-xs font-bold text-slate-900 dark:text-white">Live Algorand ASA Inspection</h2>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">TestNet Consensus Live</span>
-        </div>
-      </div>
-
-      <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
-        <MetaRow icon={<Hash className="w-3.5 h-3.5" />} label="ASA ID">
-          <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">#{info.assetId}</span>
-        </MetaRow>
-        <MetaRow icon={<Package className="w-3.5 h-3.5" />} label="Unit Name">
-          <span className="font-mono text-slate-900 dark:text-white font-medium">{info.unitName || "-"}</span>
-        </MetaRow>
-        <MetaRow icon={<Activity className="w-3.5 h-3.5" />} label="Total Supply">
-          <span className="text-slate-900 dark:text-white font-medium">{info.total} unit (Non-fungible)</span>
-        </MetaRow>
-        {info.createdAtRound && (
-          <MetaRow icon={<Clock className="w-3.5 h-3.5" />} label="Mint Round">
-            <span className="font-mono text-slate-700 dark:text-slate-300">#{info.createdAtRound.toLocaleString()}</span>
-          </MetaRow>
-        )}
-        <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Creator Address">
-          <span className="font-mono text-[10px] text-slate-700 dark:text-slate-300">
-            {info.creator.slice(0, 10)}...{info.creator.slice(-6)}
-          </span>
-        </MetaRow>
-      </div>
-
-      <div className="px-5 pb-4 pt-1 flex items-center justify-between border-t border-slate-100 dark:border-white/[0.04]">
-        <a
-          href={`https://testnet.explorer.perawallet.app/asset/${info.assetId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium transition-colors"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          <span>View on Pera Explorer</span>
-        </a>
-
-        {info.url && (
-          <a
-            href={info.url.replace("ipfs://", "https://ipfs.io/ipfs/").replace("#arc3", "")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Metadata Payload</span>
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function CheckIcon({ status }: { status: "pass" | "fail" | "warn" | "skip" }) {
-  if (status === "pass")
-    return <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />;
-  if (status === "fail")
-    return <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />;
-  if (status === "warn")
-    return <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />;
-  return <Clock className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />;
-}
-
-function MetaRow({
-  icon,
-  label,
-  children,
-}: {
-  icon?: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 min-w-0">
-      <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 shrink-0 text-xs">
-        {icon}
-        {label}
-      </span>
-      <div className="text-right truncate">{children}</div>
+      )}
     </div>
   );
 }

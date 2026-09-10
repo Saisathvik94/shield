@@ -63,12 +63,18 @@ export function Button({
       )}
       {...props}
     >
-      {loading ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-      ) : icon ? (
-        <span className="shrink-0">{icon}</span>
-      ) : null}
-      {children}
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {loading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          ) : icon ? (
+            <span className="shrink-0">{icon}</span>
+          ) : null}
+          {children}
+        </>
+      )}
     </Comp>
   );
 }
