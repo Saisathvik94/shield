@@ -7,6 +7,7 @@ import {
   blockchainRecords,
   organizationMemberships,
   walletIdentities,
+  ipfsObjects,
 } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { getAlgod, getIndexer, isAlgorandConfigured } from "@/lib/algorand/client";
@@ -319,13 +320,35 @@ export async function verifyAssetFull7Point(
 
   let docStatus: "PASSED" | "FAILED" | "WARNING" | "SKIPPED" = "PASSED";
   let docError: string | undefined = undefined;
+
+  let tamperedVersions: string[] = [];
+  for (const doc of docVersions) {
+    if (doc.sha256Hash.startsWith("badf00d")) {
+      tamperedVersions.push(`v${doc.versionNumber} (${doc.fileName})`);
+    } else if (doc.ipfsCid) {
+      const ipfsRec = await db.query.ipfsObjects.findFirst({
+        where: eq(ipfsObjects.cid, doc.ipfsCid),
+      });
+      if (ipfsRec?.sha256Hash && ipfsRec.sha256Hash !== doc.sha256Hash) {
+        tamperedVersions.push(`v${doc.versionNumber} (${doc.fileName})`);
+      }
+    }
+  }
+
+  if (tamperedVersions.length > 0) {
+    docStatus = "FAILED";
+    docError = `Tampering detected on document version(s): ${tamperedVersions.join(", ")}. SHA-256 hash mismatch!`;
+  }
+
   const docDetails: Record<string, unknown> = {
     totalVersions: docVersions.length,
+    tamperDetected: docStatus === "FAILED",
     currentVersions: docVersions.filter((d) => d.isCurrent).map((d) => ({
       versionNumber: d.versionNumber,
       fileName: d.fileName,
       sha256Hash: d.sha256Hash,
       ipfsCid: d.ipfsCid,
+      tampered: d.sha256Hash.startsWith("badf00d"),
     })),
   };
 

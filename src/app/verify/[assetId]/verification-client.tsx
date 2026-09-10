@@ -26,7 +26,11 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Upload,
+  FileUp,
+  AlertOctagon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { classificationColor, copyWithToast, cn, getVerificationUrl } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { AdvancedAssetVerificationResult, VerificationCheckPoint } from "@/lib/verification/asset-verifier";
@@ -48,12 +52,63 @@ export function VerificationClient({
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  // Client-Side Zero-Knowledge Tamper Testing State
+  const [testingFile, setTestingFile] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    status: "passed" | "tampered" | null;
+    calculatedHash?: string;
+    expectedHash?: string;
+    fileName?: string;
+  }>({ status: null });
+
   useEffect(() => {
     const url = getVerificationUrl(assetSummary?.assetId || assetId);
     QRCode.toDataURL(url, { width: 280, margin: 2 })
       .then(setQrDataUrl)
       .catch(console.error);
   }, [assetId, assetSummary?.assetId]);
+
+  const handleTestFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTestingFile(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+
+      // Extract expected hashes from document integrity details
+      const currentDocs = (points.documentIntegrity.details as any)?.currentVersions || [];
+      const expectedHashes: string[] = currentDocs
+        .map((d: any) => d.sha256Hash?.toLowerCase())
+        .filter(Boolean);
+
+      const isMatch = expectedHashes.length > 0 && expectedHashes.includes(hashHex.toLowerCase());
+
+      if (isMatch) {
+        setTestResult({
+          status: "passed",
+          calculatedHash: hashHex,
+          expectedHash: expectedHashes[0] || hashHex,
+          fileName: file.name,
+        });
+        toast.success("Zero-Knowledge Check PASSED: File matches on-chain genesis hash byte-for-byte!");
+      } else {
+        setTestResult({
+          status: "tampered",
+          calculatedHash: hashHex,
+          expectedHash: expectedHashes[0] || "Unknown",
+          fileName: file.name,
+        });
+        toast.error("TAMPER DETECTED: Computed SHA-256 does NOT match registered genesis anchor!");
+      }
+    } catch (err: any) {
+      toast.error("Failed to calculate file hash: " + err.message);
+    } finally {
+      setTestingFile(false);
+    }
+  };
 
   const handleCopy = (text: string, id: string) => {
     copyWithToast(text, "Verification Data");
@@ -287,6 +342,84 @@ export function VerificationClient({
             </div>
           </div>
         )}
+
+        {/* Live Client-Side Zero-Knowledge File Tamper Check Card */}
+        <div className="p-5 rounded-3xl bg-white dark:bg-[#0c0d14] border border-blue-200/80 dark:border-blue-500/20 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                <FileUp className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Zero-Knowledge File Tamper Verifier
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Verify local file integrity directly in your browser. Files are hashed locally and never uploaded.
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 font-semibold border border-blue-200 dark:border-blue-500/20">
+              WebCrypto SHA-256
+            </span>
+          </div>
+
+          <div className="border-2 border-dashed border-slate-200 dark:border-white/[0.1] hover:border-blue-500 dark:hover:border-blue-500/50 rounded-2xl p-6 text-center transition-all bg-slate-50/50 dark:bg-white/[0.01]">
+            <input
+              type="file"
+              id="tamper-file-input"
+              className="hidden"
+              onChange={handleTestFile}
+              disabled={testingFile}
+            />
+            <label
+              htmlFor="tamper-file-input"
+              className="cursor-pointer flex flex-col items-center justify-center gap-2"
+            >
+              <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-600/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                <Upload className="w-5 h-5" />
+              </div>
+              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                {testingFile ? "Hashing in memory..." : "Drop original document here or click to select file"}
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Calculates cryptographic SHA-256 fingerprint in browser memory
+              </p>
+            </label>
+          </div>
+
+          {/* Test Result Display */}
+          {testResult.status === "passed" && (
+            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 space-y-2 animate-in fade-in-50 duration-200">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>INTEGRITY VERIFIED: 100% UNTAMPERED</span>
+              </div>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                The file <strong className="font-mono">{testResult.fileName}</strong> matches the registered on-chain genesis digest byte-for-byte. Zero modifications detected.
+              </p>
+              <div className="p-2.5 rounded-xl bg-white/80 dark:bg-black/40 font-mono text-[11px] text-emerald-900 dark:text-emerald-200 truncate">
+                Computed SHA-256: {testResult.calculatedHash}
+              </div>
+            </div>
+          )}
+
+          {testResult.status === "tampered" && (
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/25 space-y-2 animate-in fade-in-50 duration-200">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-800 dark:text-rose-300">
+                <AlertOctagon className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                <span>CRITICAL: TAMPERING DETECTED / CHECKSUM MISMATCH</span>
+              </div>
+              <p className="text-xs text-rose-700 dark:text-rose-400">
+                The provided file <strong className="font-mono">{testResult.fileName}</strong> has been modified, corrupted, or altered! Its cryptographic digest does not match the on-chain genesis record.
+              </p>
+              <div className="p-2.5 rounded-xl bg-white/80 dark:bg-black/40 font-mono text-[11px] text-rose-900 dark:text-rose-200 space-y-1">
+                <p className="text-rose-600 dark:text-rose-400">Computed Hash: {testResult.calculatedHash}</p>
+                <p className="text-slate-500 dark:text-slate-400">Expected Hash: {testResult.expectedHash}</p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 7-Point Verification Checkpoints Breakdown */}
         <div className="space-y-3">

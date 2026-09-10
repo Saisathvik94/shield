@@ -9,6 +9,7 @@ import {
   blockchainRecords,
   riskAssessments,
   approvalPolicies,
+  ipfsObjects,
 } from '@/db/schema';
 import { eq, and, desc, gte } from 'drizzle-orm';
 import { createAuditEvent } from '@/db/queries/audit';
@@ -151,20 +152,42 @@ export async function evaluateAssetRisk(
   // -------------------------------------------------------------------------
   const docVersions = await db.query.documentVersions.findMany({
     where: and(
-      eq(documentVersions.assetId, assetId),
+      eq(documentVersions.assetId, asset.id),
       eq(documentVersions.organizationId, organizationId)
     ),
     orderBy: [desc(documentVersions.versionNumber)],
   });
 
   let hasUnverifiedDoc = false;
+  let tamperedDocs: string[] = [];
   for (const ver of docVersions) {
     if (!ver.sha256Hash || !ver.ipfsCid) {
       hasUnverifiedDoc = true;
+    } else if (ver.sha256Hash.startsWith('badf00d')) {
+      tamperedDocs.push(`v${ver.versionNumber}`);
+    } else {
+      const ipfsRec = await db.query.ipfsObjects.findFirst({
+        where: eq(ipfsObjects.cid, ver.ipfsCid),
+      });
+      if (ipfsRec?.sha256Hash && ipfsRec.sha256Hash !== ver.sha256Hash) {
+        tamperedDocs.push(`v${ver.versionNumber}`);
+      }
     }
   }
 
-  if (hasUnverifiedDoc) {
+  if (tamperedDocs.length > 0) {
+    signals.push({
+      code: 'DOC_TAMPER_DETECTED',
+      name: 'Document File Tampering Detected',
+      category: 'DOCUMENT',
+      severity: 'CRITICAL',
+      scoreImpact: 50,
+      description: `Cryptographic SHA-256 checksum mismatch on document version(s): ${tamperedDocs.join(', ')}.`,
+      mitigation: 'Immediately investigate audit trail and restore canonical document version.',
+      detected: true,
+    });
+    blockReasons.push(`Document tampering detected on version(s) ${tamperedDocs.join(', ')}`);
+  } else if (hasUnverifiedDoc) {
     signals.push({
       code: 'DOC_UNVERIFIED',
       name: 'Incomplete Document Hashes',

@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { documentVersions, auditEvents } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { documentVersions, auditEvents, ipfsObjects } from "@/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { computeSha256 } from "@/lib/crypto/canonicalize";
 
 export interface DocumentIntegrityResult {
@@ -45,13 +45,35 @@ export async function verifyDocumentVersionIntegrity(
   let calculatedSha256: string | undefined = undefined;
   let tamperDetected = false;
   let valid = true;
+  let tamperReason: string | undefined = undefined;
 
+  // 1. Direct buffer check if file provided
   if (providedBuffer) {
     calculatedSha256 = computeSha256(providedBuffer);
     if (calculatedSha256 !== version.sha256Hash) {
       tamperDetected = true;
       valid = false;
+      tamperReason = `SHA-256 integrity check failed: Provided file hash (${calculatedSha256.slice(0, 16)}...) does not match registered hash (${version.sha256Hash.slice(0, 16)}...)`;
     }
+  }
+
+  // 2. Cross-reference against immutable IPFS object record
+  if (version.ipfsCid) {
+    const ipfsRecord = await db.query.ipfsObjects.findFirst({
+      where: eq(ipfsObjects.cid, version.ipfsCid),
+    });
+    if (ipfsRecord && ipfsRecord.sha256Hash && ipfsRecord.sha256Hash !== version.sha256Hash) {
+      tamperDetected = true;
+      valid = false;
+      tamperReason = `SHA-256 integrity check failed: Database hash (${version.sha256Hash.slice(0, 16)}...) altered from original IPFS pinned genesis hash (${ipfsRecord.sha256Hash.slice(0, 16)}...)`;
+    }
+  }
+
+  // 3. Check for simulated tamper marker
+  if (version.sha256Hash.startsWith("badf00d")) {
+    tamperDetected = true;
+    valid = false;
+    tamperReason = `SHA-256 integrity check failed: Simulated tampering detected with corrupted SHA-256 digest (${version.sha256Hash.slice(0, 16)}...)`;
   }
 
   // Audit event
@@ -103,6 +125,6 @@ export async function verifyDocumentVersionIntegrity(
     blockchainTxId: version.blockchainTxId,
     uploadedAt: version.uploadedAt.toISOString(),
     changeReason: version.changeReason,
-    error: tamperDetected ? "SHA-256 integrity check failed: file contents have been tampered with or corrupted" : undefined,
+    error: tamperDetected ? (tamperReason || "SHA-256 integrity check failed: file contents have been tampered with or corrupted") : undefined,
   };
 }
