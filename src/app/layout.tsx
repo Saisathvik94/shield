@@ -16,9 +16,36 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SHIELD - Secure Identity & Asset Platform",
+  title: {
+    default: "SHIELD - Secure Identity & Asset Platform",
+    template: "%s | SHIELD",
+  },
   description:
     "Blockchain-based identity, access control and digital asset management for enterprises.",
+  keywords: [
+    "Blockchain",
+    "Identity",
+    "Access Control",
+    "Digital Asset Management",
+    "Algorand",
+    "Enterprise Security",
+    "Decentralized Identity",
+  ],
+  authors: [{ name: "SHIELD Team" }],
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    title: "SHIELD - Secure Identity & Asset Platform",
+    description:
+      "Blockchain-based identity, access control and digital asset management for enterprises.",
+    siteName: "SHIELD",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SHIELD - Secure Identity & Asset Platform",
+    description:
+      "Blockchain-based identity, access control and digital asset management for enterprises.",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
