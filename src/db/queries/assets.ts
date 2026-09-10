@@ -1,10 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { assets, organizationMemberships, auditEvents, walletIdentities } from "@/db/schema";
-import {
-  hasOnChainAssetAccess,
-  isPermissionRegistryConfigured,
-} from "@/lib/algorand/permission-registry";
+import { assets, organizationMemberships, auditEvents } from "@/db/schema";
 
 /** Full asset detail including related entities */
 export async function getAssetById(assetDbId: string, userId: string) {
@@ -16,16 +12,12 @@ export async function getAssetById(assetDbId: string, userId: string) {
       department: true,
       section: true,
       organization: true,
-      access: {
-        with: {
-          user: true,
-          grantedBy: true,
-        },
-      },
+      access: true,
     },
   });
   if (!asset) return null;
 
+  // Must be an active member of the org
   const membership = await db.query.organizationMemberships.findFirst({
     where: and(
       eq(organizationMemberships.organizationId, asset.organizationId),
@@ -36,14 +28,27 @@ export async function getAssetById(assetDbId: string, userId: string) {
   });
   if (!membership) return null;
 
-  if (!isPermissionRegistryConfigured()) return null;
-  const wallet = await db.query.walletIdentities.findFirst({
-    where: eq(walletIdentities.userId, userId),
-  });
-  if (!wallet || !(await hasOnChainAssetAccess(asset.id, wallet.walletAddress))) return null;
+  const isManager = ["OWNER", "ADMIN", "MANAGER"].includes(membership.role);
+
+  // Managers always have access
+  if (isManager) return { asset, membership };
+
+  // Non-managers: must be owner, custodian, in same department, or have explicit grant
+  const deptId =
+    (membership.assignments as { departmentId?: string | null }[])?.[0]
+      ?.departmentId ?? null;
+
+  const hasAccess =
+    asset.ownerId === userId ||
+    asset.custodianId === userId ||
+    (deptId !== null && asset.departmentId === deptId) ||
+    (asset.access as { userId: string }[])?.some((a) => a.userId === userId);
+
+  if (!hasAccess) return null;
 
   return { asset, membership };
 }
+
 // Infer the type of the asset returned with relations
 export type AssetWithRelations = NonNullable<
   Awaited<ReturnType<typeof getAssetById>>
@@ -58,6 +63,7 @@ export async function getAssetIpfsObjects(assetDbId: string) {
     with: { uploadedBy: true },
   });
 }
+
 /** Blockchain records for an asset */
 export async function getAssetBlockchainRecords(assetDbId: string) {
   const { blockchainRecords } = await import("@/db/schema");
@@ -83,4 +89,3 @@ export async function getAssetAuditEvents(assetDbId: string, limit = 20) {
     with: { actor: true },
   });
 }
-
