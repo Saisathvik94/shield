@@ -5,11 +5,38 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Package, Shield, ShieldCheck, FileText, CloudUpload,
-  ExternalLink, Copy, CheckCircle2, XCircle, Loader2, Hash, MapPin,
-  User, Calendar, Activity, FileCheck2, AlertTriangle, QrCode,
-  ChevronDown, ChevronUp, Download, Link2, Zap, RotateCw,
-  ArrowRightLeft, ThumbsUp, ThumbsDown, Archive, Fingerprint,
+  ArrowLeft,
+  Package,
+  Shield,
+  ShieldCheck,
+  FileText,
+  CloudUpload,
+  ExternalLink,
+  Copy,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  MapPin,
+  User,
+  Calendar,
+  Activity,
+  FileCheck2,
+  AlertTriangle,
+  QrCode,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Link2,
+  Zap,
+  ArrowRightLeft,
+  ThumbsUp,
+  ThumbsDown,
+  Archive,
+  Fingerprint,
+  Layers,
+  FileSpreadsheet,
+  Lock,
+  History,
 } from "lucide-react";
 import { uploadAssetDocument, verifyFileIntegrity } from "@/lib/ipfs/ipfs-actions";
 import { grantAssetAccess, revokeAssetAccess } from "@/lib/actions/asset-actions";
@@ -21,152 +48,276 @@ import {
   retireAsset,
 } from "@/lib/actions/transfer-actions";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { classificationColor, relativeTime, cn } from "@/lib/utils";
+import { TechnicalDetails } from "@/components/ui/technical-details";
+import { EmptyState } from "@/components/ui/empty-state";
+import { classificationColor, formatBytes, relativeTime, cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AssetData {
-  id: string; assetId: string; name: string; description: string | null;
-  assetType: string; classification: string; status: string;
-  location: string | null; physicalIdentifier: string | null;
-  algorandAssetId: string | null; blockchainTxId: string | null;
-  ipfsCid: string | null; createdAt: string; updatedAt: string;
+  id: string;
+  assetId: string;
+  name: string;
+  description: string | null;
+  assetType: string;
+  classification: string;
+  status: string;
+  location: string | null;
+  physicalIdentifier: string | null;
+  algorandAssetId: string | null;
+  blockchainTxId: string | null;
+  ipfsCid: string | null;
+  createdAt: string;
+  updatedAt: string;
   organization: { id: string; name: string; slug: string };
   owner: { id: string; name: string; email: string } | null;
   custodian: { id: string; name: string; email: string } | null;
-  department: string | null; section: string | null;
-  transferToUserId: string | null; transferReason: string | null;
+  department: string | null;
+  section: string | null;
+  transferToUserId: string | null;
+  transferReason: string | null;
 }
 
-interface OrgMember { id: string; name: string; email: string; }
-interface AssetAccess { user: OrgMember; }
+interface OrgMember {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface AssetAccess {
+  user: OrgMember;
+}
 
 interface IpfsObjectData {
-  id: string; cid: string; gatewayUrl: string | null; objectType: string;
-  fileName: string | null; fileSize: number | null; mimeType: string | null;
-  sha256Hash: string | null; createdAt: string;
+  id: string;
+  cid: string;
+  gatewayUrl: string | null;
+  objectType: string;
+  fileName: string | null;
+  fileSize: number | null;
+  mimeType: string | null;
+  sha256Hash: string | null;
+  createdAt: string;
   uploadedBy: { name: string; email: string } | null;
 }
 
 interface BlockchainRecordData {
-  id: string; txId: string; confirmedRound: string | null; recordType: string;
-  algorandAssetId: string | null; network: string; notePayload: string | null;
-  createdAt: string; actor: { name: string } | null;
+  id: string;
+  txId: string;
+  confirmedRound: string | null;
+  recordType: string;
+  algorandAssetId: string | null;
+  network: string;
+  notePayload: string | null;
+  createdAt: string;
+  actor: { name: string } | null;
 }
 
 interface AuditEventData {
-  id: string; eventType: string; description: string | null;
-  blockchainTxId: string | null; ipfsCid: string | null;
-  createdAt: string; actor: { name: string } | null;
+  id: string;
+  eventType: string;
+  description: string | null;
+  blockchainTxId: string | null;
+  ipfsCid: string | null;
+  createdAt: string;
+  actor: { name: string } | null;
 }
 
 interface Props {
-  orgId: string; canManage: boolean; isOwnerOrAdmin: boolean;
-  currentUserId: string; asset: AssetData; orgMembers: OrgMember[];
+  orgId: string;
+  canManage: boolean;
+  isOwnerOrAdmin: boolean;
+  currentUserId: string;
+  asset: AssetData;
+  orgMembers: OrgMember[];
   access: AssetAccess[];
-  ipfsObjects: IpfsObjectData[]; blockchainRecords: BlockchainRecordData[];
+  ipfsObjects: IpfsObjectData[];
+  blockchainRecords: BlockchainRecordData[];
   auditEvents: AuditEventData[];
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  CREATED: "text-gray-400 bg-gray-400/10",
-  REGISTERED: "text-blue-400 bg-blue-400/10",
-  ASSIGNED: "text-indigo-400 bg-indigo-400/10",
-  ACTIVE: "text-green-400 bg-green-400/10",
-  TRANSFER_REQUESTED: "text-yellow-400 bg-yellow-400/10",
-  TRANSFERRED: "text-cyan-400 bg-cyan-400/10",
-  REVOKED: "text-red-400 bg-red-400/10",
-  RETIRED: "text-gray-500 bg-gray-500/10",
-};
-
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function AssetPassportClient({
-  orgId, canManage, isOwnerOrAdmin, currentUserId,
-  asset, orgMembers, ipfsObjects, blockchainRecords, auditEvents,
+  orgId,
+  canManage,
+  isOwnerOrAdmin,
+  currentUserId,
+  asset,
+  orgMembers,
+  ipfsObjects,
+  blockchainRecords,
+  auditEvents,
   access,
 }: Props) {
   const cls = classificationColor(asset.classification);
-  const statusCls = STATUS_COLORS[asset.status] ?? "text-gray-400 bg-gray-400/10";
-  const stripeClass =
-    asset.classification === "CRITICAL" ? "bg-gradient-to-r from-red-600 to-rose-500"
-    : asset.classification === "SECRET" ? "bg-gradient-to-r from-orange-600 to-amber-500"
-    : asset.classification === "CONFIDENTIAL" ? "bg-gradient-to-r from-yellow-600 to-yellow-400"
-    : "bg-gradient-to-r from-blue-600 to-violet-600";
-
   const isActive = !["REVOKED", "RETIRED"].includes(asset.status);
   const isPendingTransfer = asset.status === "TRANSFER_REQUESTED";
 
+  const technicalItems = [
+    { label: "Internal Database ID", value: asset.id },
+    { label: "SHIELD Asset ID", value: asset.assetId, copyable: true },
+    ...(asset.algorandAssetId
+      ? [
+          {
+            label: "Algorand ASA ID",
+            value: asset.algorandAssetId,
+            copyable: true,
+            href: `https://testnet.explorer.perawallet.app/asset/${asset.algorandAssetId}`,
+          },
+        ]
+      : []),
+    ...(asset.blockchainTxId
+      ? [
+          {
+            label: "Registration TXID",
+            value: asset.blockchainTxId,
+            copyable: true,
+            href: `https://testnet.explorer.perawallet.app/tx/${asset.blockchainTxId}`,
+          },
+        ]
+      : []),
+    ...(asset.ipfsCid
+      ? [
+          {
+            label: "Primary Document CID",
+            value: asset.ipfsCid,
+            copyable: true,
+            href: `https://ipfs.io/ipfs/${asset.ipfsCid}`,
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      {/* Breadcrumb back */}
       <Link
         href={`/dashboard/orgs/${orgId}/assets`}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-6"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" /> Back to assets
+        <ArrowLeft className="w-3.5 h-3.5" /> Back to Assets Registry
       </Link>
 
-      {/* Passport header */}
-      <div className="bg-[#111118] border border-white/[0.06] rounded-2xl overflow-hidden mb-6">
-        <div className={cn("h-1.5", stripeClass)} />
-        <div className="p-6">
-          <div className="flex items-start gap-5">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600/20 to-blue-600/20 border border-white/[0.08] flex items-center justify-center shrink-0">
-              <Package className="w-7 h-7 text-violet-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className="text-xl font-bold text-white font-mono">{asset.assetId}</span>
-                <span className={cn("text-xs px-2 py-0.5 rounded font-semibold", cls.className)}>{cls.label}</span>
-                <span className={cn("text-xs px-2 py-0.5 rounded font-medium", statusCls)}>{asset.status.replace(/_/g, " ")}</span>
+      {/* Asset Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#0f1017] border border-slate-200 dark:border-white/[0.08] shadow-sm transition-colors">
+        {/* Top Accent Stripe based on classification */}
+        <div
+          className={cn(
+            "h-1.5 w-full",
+            asset.classification === "CRITICAL"
+              ? "bg-rose-500"
+              : asset.classification === "SECRET"
+              ? "bg-amber-500"
+              : asset.classification === "CONFIDENTIAL"
+              ? "bg-blue-500"
+              : "bg-slate-400 dark:bg-slate-600"
+          )}
+        />
+
+        <div className="p-6 sm:p-8">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 flex items-center justify-center shrink-0">
+                <Package className="w-7 h-7 text-blue-600 dark:text-blue-400" />
               </div>
-              <h1 className="text-lg font-semibold text-white">{asset.name}</h1>
-              {asset.description && <p className="text-sm text-gray-400 mt-1">{asset.description}</p>}
-              <div className="flex flex-wrap gap-2 mt-3">
-                {asset.algorandAssetId && (
-                  <Badge variant="success" className="gap-1">
-                    <ShieldCheck className="w-3 h-3" /> ASA #{asset.algorandAssetId}
-                  </Badge>
-                )}
-                {asset.ipfsCid && (
-                  <Badge variant="info" className="gap-1">
-                    <Hash className="w-3 h-3" /> IPFS {asset.ipfsCid.slice(0, 12)}…
-                  </Badge>
-                )}
-                {asset.blockchainTxId && (
-                  <a href={`https://testnet.explorer.perawallet.app/tx/${asset.blockchainTxId}`} target="_blank" rel="noopener noreferrer">
-                    <Badge variant="success" className="gap-1 cursor-pointer hover:opacity-80">
-                      <ExternalLink className="w-3 h-3" /> View on Algorand
-                    </Badge>
-                  </a>
+              <div className="space-y-1.5 min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-xl font-bold text-slate-900 dark:text-white font-mono tracking-tight">
+                    {asset.assetId}
+                  </span>
+                  <span className={cn("text-xs px-2.5 py-0.5 rounded-md font-semibold", cls.className)}>
+                    {cls.label}
+                  </span>
+                  <StatusBadge status={asset.status} />
+                </div>
+                <h1 className="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">{asset.name}</h1>
+                {asset.description && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 max-w-2xl">{asset.description}</p>
                 )}
               </div>
-              {/* Tokenise button */}
-              {canManage && !asset.algorandAssetId && isActive && (
-                <TokeniseButton assetDbId={asset.id} orgId={orgId} />
-              )}
             </div>
-            <div className="shrink-0 hidden sm:flex flex-col items-center gap-1.5">
+
+            {/* Quick Actions & Verify Button */}
+            <div className="flex items-center gap-3 self-start md:self-auto shrink-0">
               <Link
                 href={`/verify/${asset.assetId}`}
-                className="w-16 h-16 bg-white/[0.05] border border-white/[0.08] rounded-xl flex items-center justify-center hover:bg-white/[0.08] transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-white/[0.04] hover:bg-slate-200 dark:hover:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all shadow-xs"
               >
-                <QrCode className="w-8 h-8 text-gray-400" />
+                <QrCode className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Public Verification</span>
+                <ExternalLink className="w-3 h-3 text-slate-400 dark:text-slate-500" />
               </Link>
-              <span className="text-[10px] text-gray-500">Verify</span>
+
+              {canManage && !asset.algorandAssetId && isActive && (
+                <TokeniseButton assetDbId={asset.id} />
+              )}
+            </div>
+          </div>
+
+          {/* Trust Checklist Banner (§14) */}
+          <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/[0.06] grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04]">
+              {asset.algorandAssetId ? (
+                <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              ) : (
+                <Shield className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-800 dark:text-slate-200">Algorand ASA</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {asset.algorandAssetId ? `Tokenized (ASA #${asset.algorandAssetId})` : "Not yet tokenized"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04]">
+              {asset.ipfsCid ? (
+                <FileCheck2 className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+              ) : (
+                <FileText className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-800 dark:text-slate-200">Document Integrity</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {asset.ipfsCid ? `${ipfsObjects.length} file(s) on IPFS` : "No IPFS files anchored"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04]">
+              <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-800 dark:text-slate-200">Lifecycle State</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {asset.status === "ACTIVE" ? "Operational & Verified" : asset.status.replace(/_/g, " ")}
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
+        {/* Left Column: Metadata & Technical Proofs */}
+        <div className="lg:col-span-1 space-y-6">
           <PassportMetadata asset={asset} />
+          <TechnicalDetails
+            title="Cryptographic & Chain Proofs"
+            description="Algorand ASA, transaction hashes, and IPFS CIDs for this asset."
+            items={technicalItems}
+          />
         </div>
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          {/* Transfer panel */}
+
+        {/* Right Column: Workflows, Documents, Access, History */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Transfer & Approval Workflow */}
           {isActive && (
             <TransferPanel
               asset={asset}
@@ -177,21 +328,28 @@ export function AssetPassportClient({
               currentUserId={currentUserId}
             />
           )}
+
+          {/* IPFS Documents & Tamper Verifier */}
           <DocumentsPanel
             orgId={orgId}
             assetDbId={asset.id}
             ipfsObjects={ipfsObjects}
             canManage={canManage}
           />
+
+          {/* Access Control List */}
           <AccessPanel
             assetDbId={asset.id}
             access={access}
             orgMembers={orgMembers}
             canManage={canManage}
           />
+
+          {/* Blockchain & Event History */}
           {blockchainRecords.length > 0 && <BlockchainPanel records={blockchainRecords} />}
           <AuditPanel events={auditEvents} />
-          {/* Retire / danger zone */}
+
+          {/* Danger Zone */}
           {isOwnerOrAdmin && isActive && !isPendingTransfer && (
             <DangerZone assetDbId={asset.id} assetLabel={asset.assetId} />
           )}
@@ -201,76 +359,90 @@ export function AssetPassportClient({
   );
 }
 
-// ─── Passport metadata ────────────────────────────────────────────────────────
+// ─── Metadata Card ────────────────────────────────────────────────────────────
 
 function PassportMetadata({ asset }: { asset: AssetData }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-blue-400" /> Asset Passport
+          <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          Asset Identity
         </CardTitle>
+        <CardDescription>Core organizational metadata &amp; custodial assignment</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3 text-sm">
-        <MetaRow icon={<Package className="w-3.5 h-3.5" />} label="Type">
-          {asset.assetType.replace(/_/g, " ")}
+      <CardContent className="space-y-3.5 text-xs">
+        <MetaRow icon={<Package className="w-3.5 h-3.5" />} label="Asset Type">
+          <span className="font-medium text-slate-900 dark:text-white">{asset.assetType.replace(/_/g, " ")}</span>
         </MetaRow>
+
         {asset.organization && (
           <MetaRow icon={<Link2 className="w-3.5 h-3.5" />} label="Organization">
-            {asset.organization.name}
+            <span className="font-medium text-slate-900 dark:text-white">{asset.organization.name}</span>
           </MetaRow>
         )}
+
         {asset.department && (
-          <MetaRow icon={<Package className="w-3.5 h-3.5" />} label="Department">
-            {asset.department}{asset.section && <span className="text-gray-500"> → {asset.section}</span>}
+          <MetaRow icon={<Layers className="w-3.5 h-3.5" />} label="Department">
+            <span className="font-medium text-slate-900 dark:text-white">
+              {asset.department}
+              {asset.section && <span className="text-slate-400 dark:text-slate-500 font-normal"> → {asset.section}</span>}
+            </span>
           </MetaRow>
         )}
+
         {asset.owner && (
-          <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Owner">{asset.owner.name}</MetaRow>
+          <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Owner">
+            <span className="font-medium text-slate-900 dark:text-white">{asset.owner.name}</span>
+          </MetaRow>
         )}
+
         {asset.custodian && (
-          <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Custodian">{asset.custodian.name}</MetaRow>
+          <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Custodian">
+            <span className="font-medium text-slate-900 dark:text-white">{asset.custodian.name}</span>
+          </MetaRow>
         )}
+
         {asset.location && (
-          <MetaRow icon={<MapPin className="w-3.5 h-3.5" />} label="Location">{asset.location}</MetaRow>
+          <MetaRow icon={<MapPin className="w-3.5 h-3.5" />} label="Physical Location">
+            <span className="font-medium text-slate-900 dark:text-white">{asset.location}</span>
+          </MetaRow>
         )}
+
         {asset.physicalIdentifier && (
-          <MetaRow icon={<Fingerprint className="w-3.5 h-3.5" />} label="Physical ID">
-            <span className="font-mono text-xs">{asset.physicalIdentifier}</span>
+          <MetaRow icon={<Fingerprint className="w-3.5 h-3.5" />} label="Serial / Tag">
+            <span className="font-mono text-slate-700 dark:text-slate-300">{asset.physicalIdentifier}</span>
           </MetaRow>
         )}
-        <div className="border-t border-white/[0.06] pt-3 mt-1 flex flex-col gap-2.5">
+
+        <div className="pt-3 border-t border-slate-100 dark:border-white/[0.06] space-y-2.5">
           <MetaRow icon={<Calendar className="w-3.5 h-3.5" />} label="Registered">
-            {relativeTime(asset.createdAt)}
+            <span className="text-slate-500 dark:text-slate-400">{relativeTime(asset.createdAt)}</span>
           </MetaRow>
-          <MetaRow icon={<Calendar className="w-3.5 h-3.5" />} label="Updated">
-            {relativeTime(asset.updatedAt)}
+          <MetaRow icon={<History className="w-3.5 h-3.5" />} label="Last Updated">
+            <span className="text-slate-500 dark:text-slate-400">{relativeTime(asset.updatedAt)}</span>
           </MetaRow>
         </div>
-        {asset.ipfsCid && (
-          <div className="border-t border-white/[0.06] pt-3 mt-1">
-            <p className="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider font-medium">Primary IPFS CID</p>
-            <CopyableHash value={asset.ipfsCid} />
-          </div>
-        )}
-        {asset.algorandAssetId && (
-          <div className="pt-1">
-            <p className="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider font-medium">Algorand ASA ID</p>
-            <CopyableHash value={asset.algorandAssetId} />
-          </div>
-        )}
       </CardContent>
     </Card>
   );
 }
 
-// ─── Transfer panel ───────────────────────────────────────────────────────────
+// ─── Transfer & Custody Workflow Panel ─────────────────────────────────────────
 
 function TransferPanel({
-  asset, orgId, orgMembers, canManage, isOwnerOrAdmin, currentUserId,
+  asset,
+  orgMembers,
+  canManage,
+  isOwnerOrAdmin,
+  currentUserId,
 }: {
-  asset: AssetData; orgId: string; orgMembers: OrgMember[];
-  canManage: boolean; isOwnerOrAdmin: boolean; currentUserId: string;
+  asset: AssetData;
+  orgId: string;
+  orgMembers: OrgMember[];
+  canManage: boolean;
+  isOwnerOrAdmin: boolean;
+  currentUserId: string;
 }) {
   const router = useRouter();
   const [requestPending, startRequest] = useTransition();
@@ -283,10 +455,6 @@ function TransferPanel({
   const [showRejectForm, setShowRejectForm] = useState(false);
 
   const isPending = asset.status === "TRANSFER_REQUESTED";
-  const isCustodianOrOwner =
-    asset.custodian?.id === currentUserId || asset.owner?.id === currentUserId;
-
-  // Members excluding current custodian/owner as transfer targets
   const eligibleTargets = orgMembers.filter(
     (m) => m.id !== asset.custodian?.id && m.id !== currentUserId
   );
@@ -301,7 +469,7 @@ function TransferPanel({
     startRequest(async () => {
       const r = await requestTransfer(asset.id, toUserId, reason);
       if (r.status === "success") {
-        toast.success("Transfer requested");
+        toast.success("Custody transfer requested.");
         setShowForm(false);
         router.refresh();
       } else toast.error(r.message);
@@ -312,7 +480,7 @@ function TransferPanel({
     startApprove(async () => {
       const r = await approveTransfer(asset.id);
       if (r.status === "success") {
-        toast.success("Transfer approved and completed");
+        toast.success("Custody transfer approved & completed.");
         router.refresh();
       } else toast.error(r.message);
     });
@@ -323,30 +491,32 @@ function TransferPanel({
     startReject(async () => {
       const r = await rejectTransfer(asset.id, rejectReason || "No reason provided");
       if (r.status === "success") {
-        toast.success("Transfer rejected");
+        toast.success("Custody transfer request rejected.");
         setShowRejectForm(false);
         router.refresh();
       } else toast.error(r.message);
     });
   }
 
-  // If transfer pending - show approval UI for managers
   if (isPending) {
     return (
-      <Card>
+      <Card className="border-amber-200 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/[0.03]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ArrowRightLeft className="w-4 h-4 text-yellow-400" />
+          <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+            <ArrowRightLeft className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             Transfer Pending Approval
           </CardTitle>
+          <CardDescription>
+            A request to transfer custody of this asset is awaiting administrative review.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-4">
-            <p className="text-sm text-yellow-200 font-medium">
-              Transfer requested → {transferTargetName ?? "Unknown"}
+        <CardContent className="space-y-4">
+          <div className="rounded-xl bg-amber-100/60 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-4 space-y-1">
+            <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+              Target Custodian: <span className="text-slate-900 dark:text-white font-bold">{transferTargetName}</span>
             </p>
             {asset.transferReason && (
-              <p className="text-xs text-yellow-400/70 mt-1">Reason: {asset.transferReason}</p>
+              <p className="text-xs text-amber-800 dark:text-amber-300/80">Reason: {asset.transferReason}</p>
             )}
           </div>
 
@@ -357,9 +527,9 @@ function TransferPanel({
                 loading={approvePending}
                 icon={<ThumbsUp className="w-4 h-4" />}
                 onClick={handleApprove}
-                className="flex-1"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white"
               >
-                Approve transfer
+                Approve Transfer
               </Button>
               <Button
                 variant="danger"
@@ -367,23 +537,23 @@ function TransferPanel({
                 onClick={() => setShowRejectForm(true)}
                 className="flex-1"
               >
-                Reject
+                Reject Request
               </Button>
             </div>
           )}
 
           {isOwnerOrAdmin && showRejectForm && (
-            <form onSubmit={handleReject} className="flex flex-col gap-3">
+            <form onSubmit={handleReject} className="space-y-3">
               <input
                 autoFocus
                 placeholder="Reason for rejection (optional)"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white placeholder:text-gray-500 outline-none focus:border-red-500/50"
+                className="w-full rounded-xl bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.10] px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-red-500/50"
               />
               <div className="flex gap-2">
                 <Button type="submit" variant="danger" loading={rejectPending} className="flex-1">
-                  Confirm rejection
+                  Confirm Rejection
                 </Button>
                 <Button type="button" variant="ghost" onClick={() => setShowRejectForm(false)}>
                   Cancel
@@ -396,57 +566,81 @@ function TransferPanel({
     );
   }
 
-  // Normal state - show request form if canManage
   if (!canManage) return null;
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <ArrowRightLeft className="w-4 h-4 text-blue-400" /> Transfer Asset
-          </CardTitle>
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Custody Transfer
+            </CardTitle>
+            <CardDescription>Reassign operational custody to another member</CardDescription>
+          </div>
           {!showForm && (
-            <Button size="sm" variant="secondary" icon={<ArrowRightLeft className="w-3.5 h-3.5" />} onClick={() => setShowForm(true)}>
-              Request transfer
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+              onClick={() => setShowForm(true)}
+            >
+              Initiate Transfer
             </Button>
           )}
         </div>
       </CardHeader>
       {showForm && (
         <CardContent>
-          <form onSubmit={handleRequest} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-gray-300">Transfer to</label>
+          <form onSubmit={handleRequest} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">New Custodian</label>
               <select
                 value={toUserId}
                 onChange={(e) => setToUserId(e.target.value)}
                 required
-                className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/60"
+                className="w-full rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.10] px-3.5 py-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500/60"
               >
                 <option value="">- Select member -</option>
                 {eligibleTargets.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.email})
+                  </option>
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-gray-300">Reason</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Reason for Transfer</label>
               <input
                 autoFocus
-                placeholder="Reason for transfer…"
+                placeholder="e.g., Department reassignment, equipment handoff..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 required
-                className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white placeholder:text-gray-500 outline-none focus:border-blue-500/50"
+                className="w-full rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.10] px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-500/50"
               />
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button type="button" variant="ghost" onClick={() => { setShowForm(false); setToUserId(""); setReason(""); }}>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowForm(false);
+                  setToUserId("");
+                  setReason("");
+                }}
+              >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" loading={requestPending} disabled={!toUserId || !reason.trim()} icon={<ArrowRightLeft className="w-4 h-4" />}>
-                Submit request
+              <Button
+                type="submit"
+                variant="primary"
+                loading={requestPending}
+                disabled={!toUserId || !reason.trim()}
+                icon={<ArrowRightLeft className="w-4 h-4" />}
+              >
+                Submit Transfer Request
               </Button>
             </div>
           </form>
@@ -456,12 +650,18 @@ function TransferPanel({
   );
 }
 
-// ─── Documents & IPFS panel ───────────────────────────────────────────────────
+// ─── IPFS Documents & Tamper Verifier Panel ───────────────────────────────────
 
 function DocumentsPanel({
-  orgId, assetDbId, ipfsObjects, canManage,
+  orgId,
+  assetDbId,
+  ipfsObjects,
+  canManage,
 }: {
-  orgId: string; assetDbId: string; ipfsObjects: IpfsObjectData[]; canManage: boolean;
+  orgId: string;
+  assetDbId: string;
+  ipfsObjects: IpfsObjectData[];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -473,7 +673,8 @@ function DocumentsPanel({
   const [verifyCid, setVerifyCid] = useState("");
   const [verifyResult, setVerifyResult] = useState<{
     status: "verified" | "tampered" | "not_found" | "error" | null;
-    message?: string; sha256?: string;
+    message?: string;
+    sha256?: string;
   }>({ status: null });
 
   function handleUpload(files: FileList | null) {
@@ -513,7 +714,10 @@ function DocumentsPanel({
 
   function handleVerify(files: FileList | null) {
     if (!files || files.length === 0) return;
-    if (!verifyCid.trim()) { toast.error("Paste a CID first."); return; }
+    if (!verifyCid.trim()) {
+      toast.error("Enter a CID first.");
+      return;
+    }
     const fd = new FormData();
     fd.append("file", files[0]);
     startVerify(async () => {
@@ -526,91 +730,170 @@ function DocumentsPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-blue-400" /> Documents &amp; Files
-          <span className="ml-auto text-xs font-normal text-gray-500">{ipfsObjects.length} pinned</span>
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Anchored Documents &amp; IPFS Files
+            </CardTitle>
+            <CardDescription>Decentralized immutable attachments with SHA-256 verification</CardDescription>
+          </div>
+          <Badge variant="default" className="text-xs">
+            {ipfsObjects.length} pinned
+          </Badge>
+        </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        {ipfsObjects.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {ipfsObjects.map((obj) => <FileRow key={obj.id} obj={obj} />)}
-          </ul>
+      <CardContent className="space-y-5">
+        {/* Document list */}
+        {ipfsObjects.length > 0 ? (
+          <div className="space-y-2.5">
+            {ipfsObjects.map((obj) => (
+              <FileRow key={obj.id} obj={obj} onSelectForVerify={(cid) => setVerifyCid(cid)} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={FileSpreadsheet}
+            title="No documents pinned"
+            description="Upload spec sheets, certificates, or manuals to anchor them immutably on IPFS."
+            className="py-6"
+          />
         )}
 
+        {/* Upload Box */}
         {canManage && (
-          <div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium mb-2">Upload to IPFS</p>
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-400">
+              Upload &amp; Pin Document
+            </p>
             <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                handleUpload(e.dataTransfer.files);
+              }}
               onClick={() => !uploadPending && uploadRef.current?.click()}
               className={cn(
-                "border-2 border-dashed rounded-xl p-6 flex flex-col items-center gap-3 transition-colors select-none",
-                uploadPending ? "border-blue-500/30 bg-blue-500/5 cursor-default"
-                : dragOver ? "border-blue-500/50 bg-blue-500/5 cursor-copy"
-                : "border-white/[0.08] hover:border-white/20 hover:bg-white/[0.02] cursor-pointer"
+                "border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-3 transition-all select-none",
+                uploadPending
+                  ? "border-blue-500/40 bg-blue-500/5 cursor-default"
+                  : dragOver
+                  ? "border-blue-500 bg-blue-500/10 cursor-copy"
+                  : "border-slate-200 dark:border-white/[0.08] hover:border-blue-500/40 hover:bg-slate-50 dark:hover:bg-white/[0.02] cursor-pointer"
               )}
             >
               {uploadPending ? (
                 <>
-                  <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
-                  <p className="text-sm text-blue-300">
-                    Pinning {uploadProgress.current} of {uploadProgress.total} to IPFS…
+                  <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin" />
+                  <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                    Pinning {uploadProgress.current} of {uploadProgress.total} file(s) to IPFS...
                   </p>
                 </>
               ) : (
                 <>
-                  <CloudUpload className="w-8 h-8 text-gray-500" />
+                  <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
+                    <CloudUpload className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
                   <div className="text-center">
-                    <p className="text-sm text-gray-300">Drop files or <span className="text-blue-400">browse</span></p>
-                    <p className="text-xs text-gray-600 mt-0.5">Any format · Max 50 MB each · SHA-256 computed</p>
+                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                      Drag files here or <span className="text-blue-600 dark:text-blue-400 underline">browse</span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-500 mt-0.5">
+                      Max 50 MB · Automatic SHA-256 cryptographic hashing &amp; IPFS pinning
+                    </p>
                   </div>
                 </>
               )}
-              <input ref={uploadRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} />
+              <input
+                ref={uploadRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => handleUpload(e.target.files)}
+              />
             </div>
           </div>
         )}
 
-        <div className="border-t border-white/[0.06] pt-4">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium mb-1">Verify file integrity</p>
-          <p className="text-xs text-gray-500 mb-3 leading-relaxed">Re-upload a file and match it against a stored CID to detect tampering.</p>
-          <div className="flex gap-2 mb-3">
-            <input
-              placeholder="IPFS CID (e.g. Qm… or bafy…)"
-              value={verifyCid}
-              onChange={(e) => { setVerifyCid(e.target.value); setVerifyResult({ status: null }); }}
-              className="flex-1 min-w-0 bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 font-mono"
-            />
-            <Button variant="secondary" size="sm" onClick={() => verifyRef.current?.click()} disabled={verifyPending || !verifyCid.trim()} loading={verifyPending} icon={<FileCheck2 className="w-4 h-4" />}>
-              Verify
-            </Button>
-            <input ref={verifyRef} type="file" className="hidden" onChange={(e) => handleVerify(e.target.files)} />
+        {/* Cryptographic Tamper Verifier */}
+        <div className="pt-4 border-t border-slate-100 dark:border-white/[0.06] space-y-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-400">
+              Verify Document Tampering
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Select a local file to compare its cryptographic SHA-256 checksum with the stored IPFS CID.
+            </p>
           </div>
+
+          <div className="flex gap-2">
+            <input
+              placeholder="Paste IPFS CID (e.g. Qm... or bafy...)"
+              value={verifyCid}
+              onChange={(e) => {
+                setVerifyCid(e.target.value);
+                setVerifyResult({ status: null });
+              }}
+              className="flex-1 min-w-0 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.10] rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-500/50 font-mono"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => verifyRef.current?.click()}
+              disabled={verifyPending || !verifyCid.trim()}
+              loading={verifyPending}
+              icon={<FileCheck2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
+            >
+              Verify File
+            </Button>
+            <input
+              ref={verifyRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => handleVerify(e.target.files)}
+            />
+          </div>
+
           {verifyResult.status === "verified" && (
-            <div className="flex items-start gap-2 rounded-lg bg-green-500/10 border border-green-500/20 p-3">
-              <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <p className="text-sm text-green-300 font-medium">Integrity verified</p>
-                {verifyResult.sha256 && <p className="text-[10px] text-green-500/70 mt-0.5 font-mono break-all">SHA-256: {verifyResult.sha256}</p>}
+            <div className="flex items-start gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 p-3.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div className="min-w-0 space-y-1">
+                <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  Document Integrity Check: PASS
+                </p>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400/80">
+                  The local file matches the pinned IPFS record exactly with zero byte modification.
+                </p>
+                {verifyResult.sha256 && (
+                  <p className="text-[10px] text-emerald-700 dark:text-emerald-500/70 font-mono break-all pt-1">
+                    SHA-256: {verifyResult.sha256}
+                  </p>
+                )}
               </div>
             </div>
           )}
+
           {verifyResult.status === "tampered" && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-              <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-red-300 font-medium">Integrity check FAILED</p>
-                <p className="text-xs text-red-400/80 mt-0.5">{verifyResult.message}</p>
+            <div className="flex items-start gap-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 p-3.5">
+              <XCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-rose-800 dark:text-rose-300">
+                  Integrity Check FAILED (Tampering Detected)
+                </p>
+                <p className="text-xs text-rose-700 dark:text-rose-400/80">{verifyResult.message}</p>
               </div>
             </div>
           )}
+
           {(verifyResult.status === "not_found" || verifyResult.status === "error") && (
-            <div className="flex items-start gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3">
-              <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-yellow-300">{verifyResult.message}</p>
+            <div className="flex items-start gap-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-3.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 dark:text-amber-300">{verifyResult.message}</p>
             </div>
           )}
         </div>
@@ -618,6 +901,128 @@ function DocumentsPanel({
     </Card>
   );
 }
+
+// ─── File Item Row ────────────────────────────────────────────────────────────
+
+function FileRow({
+  obj,
+  onSelectForVerify,
+}: {
+  obj: IpfsObjectData;
+  onSelectForVerify: (cid: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy(text: string) {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast.success("Copied to clipboard");
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.02] hover:bg-slate-100/70 dark:hover:bg-white/[0.04] transition-all overflow-hidden shadow-xs">
+      <div
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
+      >
+        <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0">
+          <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-slate-900 dark:text-white truncate">{obj.fileName ?? "Unnamed Document"}</p>
+          <p className="text-[10px] text-slate-500 font-mono truncate">{obj.cid}</p>
+        </div>
+        <div className="flex items-center gap-2.5 shrink-0">
+          {obj.fileSize != null && (
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">{formatBytes(obj.fileSize)}</span>
+          )}
+          {obj.gatewayUrl && (
+            <a
+              href={obj.gatewayUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/[0.06] transition-colors"
+              title="Download from IPFS"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectForVerify(obj.cid);
+            }}
+            className="text-[11px] px-2 py-0.5 rounded border border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
+          >
+            Verify
+          </button>
+          {expanded ? (
+            <ChevronUp className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+          )}
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="px-4 pb-3.5 pt-2 border-t border-slate-200 dark:border-white/[0.04] bg-white dark:bg-white/[0.01] space-y-2 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-500">IPFS CID</span>
+            <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-700 dark:text-slate-300">
+              <span className="truncate max-w-[240px]">{obj.cid}</span>
+              <button
+                onClick={() => handleCopy(obj.cid)}
+                className="text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+              >
+                {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              </button>
+            </div>
+          </div>
+
+          {obj.sha256Hash && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-slate-500">SHA-256</span>
+              <span className="font-mono text-[10px] text-slate-600 dark:text-slate-400 truncate max-w-[240px]">
+                {obj.sha256Hash}
+              </span>
+            </div>
+          )}
+
+          {obj.uploadedBy && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-slate-500">Uploaded By</span>
+              <span className="text-slate-800 dark:text-slate-300">{obj.uploadedBy.name}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-500">Pinned At</span>
+            <span className="text-slate-600 dark:text-slate-400">{relativeTime(obj.createdAt)}</span>
+          </div>
+
+          {obj.gatewayUrl && (
+            <div className="pt-1">
+              <a
+                href={obj.gatewayUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline transition-colors font-medium"
+              >
+                <ExternalLink className="w-3 h-3" /> Open via Public IPFS Gateway
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Access Control Panel ─────────────────────────────────────────────────────
 
 function AccessPanel({
   assetDbId,
@@ -641,7 +1046,7 @@ function AccessPanel({
     startTransition(async () => {
       const result = await grantAssetAccess(assetDbId, selectedUserId);
       if (result.status === "success") {
-        toast.success("Asset access granted");
+        toast.success("Asset access granted.");
         setSelectedUserId("");
         router.refresh();
       } else toast.error(result.message);
@@ -653,7 +1058,7 @@ function AccessPanel({
     startTransition(async () => {
       const result = await revokeAssetAccess(assetDbId, user.id);
       if (result.status === "success") {
-        toast.success("Asset access revoked");
+        toast.success("Asset access revoked.");
         router.refresh();
       } else toast.error(result.message);
     });
@@ -662,21 +1067,39 @@ function AccessPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <User className="w-4 h-4 text-blue-400" /> Asset Access
-          <span className="ml-auto text-xs font-normal text-gray-500">{access.length} member{access.length === 1 ? "" : "s"}</span>
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Access Permissions
+            </CardTitle>
+            <CardDescription>Explicitly authorized organization members</CardDescription>
+          </div>
+          <Badge variant="default" className="text-xs">
+            {access.length} member{access.length === 1 ? "" : "s"}
+          </Badge>
+        </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="space-y-4">
         {access.length === 0 ? (
-          <p className="text-sm text-gray-500">No additional members have access.</p>
+          <p className="text-xs text-slate-500 py-2">
+            No additional members have been granted direct asset access.
+          </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <div className="space-y-2">
             {access.map((grant) => (
-              <li key={grant.user.id} className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-gray-200 truncate">{grant.user.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{grant.user.email}</p>
+              <div
+                key={grant.user.id}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 flex items-center justify-center text-xs font-semibold text-blue-700 dark:text-blue-300 shrink-0">
+                    {grant.user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-slate-900 dark:text-white truncate">{grant.user.name}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{grant.user.email}</p>
+                  </div>
                 </div>
                 {canManage && (
                   <Button
@@ -684,29 +1107,38 @@ function AccessPanel({
                     variant="ghost"
                     disabled={pending}
                     onClick={() => handleRevoke(grant.user)}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                   >
                     Revoke
                   </Button>
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
+
         {canManage && availableMembers.length > 0 && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/60"
+              className="flex-1 min-w-0 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.10] px-3.5 py-2 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500/60"
             >
-              <option value="">- Select member -</option>
+              <option value="">- Select member to grant access -</option>
               {availableMembers.map((member) => (
-                <option key={member.id} value={member.id}>{member.name} ({member.email})</option>
+                <option key={member.id} value={member.id}>
+                  {member.name} ({member.email})
+                </option>
               ))}
             </select>
-            <Button size="sm" variant="secondary" loading={pending} disabled={!selectedUserId} onClick={handleGrant}>
-              Grant access
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={pending}
+              disabled={!selectedUserId}
+              onClick={handleGrant}
+            >
+              Grant Access
             </Button>
           </div>
         )}
@@ -715,79 +1147,68 @@ function AccessPanel({
   );
 }
 
-// ─── File row ─────────────────────────────────────────────────────────────────
-
-function FileRow({ obj }: { obj: IpfsObjectData }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg overflow-hidden">
-      <button onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors">
-        <FileText className="w-4 h-4 text-blue-400 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-white truncate">{obj.fileName ?? "Unnamed file"}</p>
-          <p className="text-[10px] text-gray-500 font-mono truncate">{obj.cid}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {obj.fileSize != null && <span className="text-xs text-gray-500">{formatBytes(obj.fileSize)}</span>}
-          {obj.gatewayUrl && (
-            <a href={obj.gatewayUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 hover:text-blue-400 transition-colors" title="Open on IPFS gateway">
-              <Download className="w-3.5 h-3.5" />
-            </a>
-          )}
-          {expanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
-        </div>
-      </button>
-      {expanded && (
-        <div className="px-3 pb-3 border-t border-white/[0.06] pt-2.5 flex flex-col gap-1.5">
-          <InfoLine label="CID" value={obj.cid} mono copyable />
-          {obj.sha256Hash && <InfoLine label="SHA-256" value={obj.sha256Hash} mono copyable />}
-          {obj.mimeType && <InfoLine label="MIME" value={obj.mimeType} />}
-          {obj.uploadedBy && <InfoLine label="Uploaded by" value={obj.uploadedBy.name} />}
-          <InfoLine label="Pinned" value={relativeTime(obj.createdAt)} />
-          {obj.gatewayUrl && (
-            <a href={obj.gatewayUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:underline mt-1">
-              <ExternalLink className="w-3 h-3" /> Open on IPFS gateway
-            </a>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Blockchain panel ─────────────────────────────────────────────────────────
+// ─── Blockchain Proof Records Panel ───────────────────────────────────────────
 
 function BlockchainPanel({ records }: { records: BlockchainRecordData[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" /> Blockchain Records
-          <Badge variant="success" className="ml-auto text-[10px]">Algorand</Badge>
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              Algorand Ledger Anchors
+            </CardTitle>
+            <CardDescription>Cryptographic transactions anchoring this asset state</CardDescription>
+          </div>
+          <Badge variant="success" className="text-xs">
+            Algorand TestNet
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
-        <ul className="divide-y divide-white/[0.04]">
+        <ul className="divide-y divide-slate-100 dark:divide-white/[0.04]">
           {records.map((r) => {
-            const explorerBase = r.network === "testnet" ? "https://testnet.explorer.perawallet.app" : "https://explorer.perawallet.app";
+            const explorerBase =
+              r.network === "testnet"
+                ? "https://testnet.explorer.perawallet.app"
+                : "https://explorer.perawallet.app";
             return (
-              <li key={r.id} className="px-5 py-3.5">
+              <li key={r.id} className="p-4 space-y-2 hover:bg-slate-50 dark:hover:bg-white/[0.01] transition-colors">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <Badge variant="success" className="text-[10px] font-mono">{r.recordType.replace(/_/g, " ")}</Badge>
-                      {r.algorandAssetId && <span className="text-[10px] text-emerald-400">ASA #{r.algorandAssetId}</span>}
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="success" className="text-[10px] font-mono">
+                        {r.recordType.replace(/_/g, " ")}
+                      </Badge>
+                      {r.algorandAssetId && (
+                        <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
+                          ASA #{r.algorandAssetId}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xs font-mono text-gray-400 truncate">TX: {r.txId}</p>
-                    <p className="text-[10px] text-gray-600 mt-0.5">
-                      {r.confirmedRound && `Round #${r.confirmedRound} · `}{relativeTime(r.createdAt)}{r.actor && ` · ${r.actor.name}`}
+                    <p className="text-xs font-mono text-slate-800 dark:text-slate-300 truncate">TX: {r.txId}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {r.confirmedRound && `Round #${r.confirmedRound} · `}
+                      {relativeTime(r.createdAt)}
+                      {r.actor && ` · by ${r.actor.name}`}
                     </p>
                   </div>
-                  <a href={`${explorerBase}/tx/${r.txId}`} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-emerald-400 transition-colors shrink-0">
+                  <a
+                    href={`${explorerBase}/tx/${r.txId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-colors shrink-0"
+                    title="View on Algorand Explorer"
+                  >
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 </div>
-                {r.notePayload && <p className="text-[10px] text-gray-600 font-mono mt-2 bg-white/[0.03] rounded px-2 py-1 break-all">{r.notePayload}</p>}
+                {r.notePayload && (
+                  <div className="bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.04] rounded-lg p-2 text-[10px] font-mono text-slate-600 dark:text-slate-400 break-all">
+                    {r.notePayload}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -797,37 +1218,48 @@ function BlockchainPanel({ records }: { records: BlockchainRecordData[] }) {
   );
 }
 
-// ─── Audit panel ──────────────────────────────────────────────────────────────
+// ─── Audit Trail Panel ────────────────────────────────────────────────────────
 
 function AuditPanel({ events }: { events: AuditEventData[] }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-gray-400" /> Asset History
+          <Activity className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          Asset Activity Log
         </CardTitle>
+        <CardDescription>Chronological log of lifecycle and state changes</CardDescription>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent>
         {events.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-8">No events recorded yet.</p>
+          <p className="text-xs text-slate-500 text-center py-6">No activity recorded yet.</p>
         ) : (
-          <div className="relative px-5 py-4">
-            <div className="absolute left-[22px] top-0 bottom-0 w-px bg-white/[0.05]" />
-            <ul className="flex flex-col gap-4">
-              {events.map((event) => (
-                <li key={event.id} className="flex items-start gap-4">
-                  <div className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 z-10 ring-2 ring-[#111118] bg-blue-400" />
-                  <div className="flex-1 min-w-0 pb-4 border-b border-white/[0.04] last:border-0 last:pb-0">
-                    <p className="text-xs text-white leading-snug">{event.description ?? event.eventType.replace(/_/g, " ")}</p>
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                      <span className="text-[10px] text-gray-600">{relativeTime(event.createdAt)}{event.actor && ` · ${event.actor.name}`}</span>
-                      {event.blockchainTxId && <Badge variant="success" className="text-[10px]">On-chain</Badge>}
-                      {event.ipfsCid && <Badge variant="info" className="text-[10px]">IPFS</Badge>}
-                    </div>
+          <div className="relative pl-6 space-y-4 border-l border-slate-200 dark:border-white/[0.08] ml-2">
+            {events.map((event) => (
+              <div key={event.id} className="relative group">
+                {/* Dot */}
+                <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400 ring-4 ring-white dark:ring-[#0f1017]" />
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-900 dark:text-white">
+                    {event.description ?? event.eventType.replace(/_/g, " ")}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                    <span>{relativeTime(event.createdAt)}</span>
+                    {event.actor && <span>· by {event.actor.name}</span>}
+                    {event.blockchainTxId && (
+                      <Badge variant="success" className="text-[10px] py-0">
+                        On-chain Proof
+                      </Badge>
+                    )}
+                    {event.ipfsCid && (
+                      <Badge variant="info" className="text-[10px] py-0">
+                        IPFS
+                      </Badge>
+                    )}
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
@@ -835,7 +1267,7 @@ function AuditPanel({ events }: { events: AuditEventData[] }) {
   );
 }
 
-// ─── Danger zone ──────────────────────────────────────────────────────────────
+// ─── Danger Zone ──────────────────────────────────────────────────────────────
 
 function DangerZone({ assetDbId, assetLabel }: { assetDbId: string; assetLabel: string }) {
   const router = useRouter();
@@ -846,42 +1278,60 @@ function DangerZone({ assetDbId, assetLabel }: { assetDbId: string; assetLabel: 
   function handleRetire(e: React.FormEvent) {
     e.preventDefault();
     startRetire(async () => {
-      const r = await retireAsset(assetDbId, reason || "End of life");
-      if (r.status === "success") { toast.success(`Asset ${assetLabel} retired`); router.refresh(); }
-      else toast.error(r.message);
+      const r = await retireAsset(assetDbId, reason || "End of lifecycle retirement");
+      if (r.status === "success") {
+        toast.success(`Asset ${assetLabel} has been retired.`);
+        router.refresh();
+      } else toast.error(r.message);
       setOpen(false);
     });
   }
 
   return (
-    <Card className="border-red-500/10">
+    <Card className="border-rose-200 dark:border-rose-500/20 bg-rose-50/50 dark:bg-rose-500/[0.02]">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-red-400">
+        <CardTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
           <Archive className="w-4 h-4" /> Danger Zone
         </CardTitle>
+        <CardDescription>Irreversible lifecycle operations</CardDescription>
       </CardHeader>
       <CardContent>
         {!open ? (
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-white font-medium">Retire asset</p>
-              <p className="text-xs text-gray-500 mt-0.5">Mark this asset as end-of-life. This cannot be undone.</p>
+              <p className="text-xs font-semibold text-slate-900 dark:text-white">Retire Asset</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                Mark this asset as decommissioned / end-of-life. This cannot be reversed.
+              </p>
             </div>
-            <Button variant="danger" size="sm" icon={<Archive className="w-4 h-4" />} onClick={() => setOpen(true)}>
-              Retire
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Archive className="w-4 h-4" />}
+              onClick={() => setOpen(true)}
+            >
+              Retire Asset
             </Button>
           </div>
         ) : (
-          <form onSubmit={handleRetire} className="flex flex-col gap-3">
-            <p className="text-sm text-red-300 font-medium">Confirm retirement of {assetLabel}</p>
+          <form onSubmit={handleRetire} className="space-y-3">
+            <p className="text-xs font-semibold text-rose-800 dark:text-rose-300">
+              Confirm retirement for asset <span className="font-mono">{assetLabel}</span>
+            </p>
             <input
-              autoFocus placeholder="Reason (optional)"
-              value={reason} onChange={(e) => setReason(e.target.value)}
-              className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white placeholder:text-gray-500 outline-none focus:border-red-500/50"
+              autoFocus
+              placeholder="Retirement reason (e.g. decommissioned, damaged, end-of-life)..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full rounded-xl bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.10] px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-rose-500/50"
             />
-            <div className="flex gap-2">
-              <Button type="submit" variant="danger" loading={retiring} className="flex-1">Confirm retire</Button>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="danger" size="sm" loading={retiring}>
+                Confirm Retirement
+              </Button>
             </div>
           </form>
         )}
@@ -890,87 +1340,60 @@ function DangerZone({ assetDbId, assetLabel }: { assetDbId: string; assetLabel: 
   );
 }
 
-// ─── Tokenise button ──────────────────────────────────────────────────────────
+// ─── Tokenise Button ──────────────────────────────────────────────────────────
 
-function TokeniseButton({ assetDbId, orgId }: { assetDbId: string; orgId: string }) {
+function TokeniseButton({ assetDbId }: { assetDbId: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [done, setDone] = useState(false);
-  void orgId;
 
   function handleTokenise() {
     startTransition(async () => {
       const result = await tokeniseAsset(assetDbId);
       if (result.status === "success") {
-        setDone(true);
-        toast.success("Asset tokenised on Algorand!", { description: `ASA #${result.algorandAssetId} · TX: ${result.txId.slice(0, 16)}…` });
+        toast.success("Asset tokenized on Algorand!", {
+          description: `ASA #${result.algorandAssetId} created successfully.`,
+        });
         router.refresh();
       } else if (result.status === "skipped") {
-        toast.info("Algorand not configured", { description: result.reason });
+        toast.info("Algorand connection", { description: result.reason });
       } else {
         toast.error(result.message);
       }
     });
   }
 
-  if (done) return null;
   return (
-    <div className="mt-3">
-      <Button
-        variant="secondary" size="sm" onClick={handleTokenise} loading={isPending}
-        icon={<Zap className="w-3.5 h-3.5 text-amber-400" />}
-        className="border-amber-500/20 text-amber-300 hover:bg-amber-500/10"
-      >
-        Tokenise on Algorand
-      </Button>
-    </div>
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={handleTokenise}
+      loading={isPending}
+      icon={<Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />}
+      className="border-amber-300 dark:border-amber-500/20 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+    >
+      Tokenize on Algorand
+    </Button>
   );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function MetaRow({ icon, label, children }: { icon?: React.ReactNode; label: string; children: React.ReactNode; }) {
+function MetaRow({
+  icon,
+  label,
+  children,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-start justify-between gap-2">
-      <span className="text-gray-500 flex items-center gap-1.5 shrink-0 text-xs">{icon}{label}</span>
-      <span className="text-gray-300 text-xs text-right">{children}</span>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 shrink-0 text-xs">
+        {icon}
+        {label}
+      </span>
+      <div className="text-right truncate">{children}</div>
     </div>
   );
-}
-
-function InfoLine({ label, value, mono, copyable }: { label: string; value: string; mono?: boolean; copyable?: boolean; }) {
-  const [copied, setCopied] = useState(false);
-  async function handleCopy() { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); }
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[10px] text-gray-500 shrink-0">{label}</span>
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className={cn("text-[10px] text-gray-400 truncate", mono && "font-mono")}>{value}</span>
-        {copyable && (
-          <button onClick={handleCopy} className="text-gray-600 hover:text-white transition-colors shrink-0">
-            {copied ? <CheckCircle2 className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CopyableHash({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  async function handleCopy() { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); }
-  return (
-    <div className="flex items-center gap-1.5 bg-white/[0.04] rounded-lg px-2.5 py-1.5">
-      <span className="text-[10px] font-mono text-gray-400 truncate flex-1">{value}</span>
-      <button onClick={handleCopy} className="text-gray-600 hover:text-white transition-colors shrink-0">
-        {copied ? <CheckCircle2 className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-      </button>
-    </div>
-  );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

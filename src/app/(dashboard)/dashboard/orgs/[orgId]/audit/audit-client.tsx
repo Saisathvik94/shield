@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -10,12 +10,18 @@ import {
   User,
   Clock,
   Zap,
-  CheckCircle2,
+  Search,
+  Layers,
+  FileText,
+  Key,
+  Users,
 } from "lucide-react";
 import { anchorEvent } from "@/lib/algorand/algorand-actions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { CopyButton } from "@/components/dashboard/copy-button";
 import { relativeTime, cn } from "@/lib/utils";
 
 interface AuditEventData {
@@ -37,87 +43,161 @@ interface Props {
   events: AuditEventData[];
 }
 
-const EVENT_DOT_COLORS: Record<string, string> = {
-  ORG_CREATED: "bg-blue-400",
-  ORG_UPDATED: "bg-blue-400",
-  MEMBER_INVITED: "bg-violet-400",
-  MEMBER_JOINED: "bg-green-400",
-  MEMBER_REMOVED: "bg-red-400",
-  ROLE_ASSIGNED: "bg-indigo-400",
-  ROLE_REVOKED: "bg-orange-400",
-  ASSET_CREATED: "bg-emerald-400",
-  ASSET_UPDATED: "bg-emerald-400",
-  ASSET_ASSIGNED: "bg-cyan-400",
-  ASSET_TRANSFERRED: "bg-yellow-400",
-  ASSET_REVOKED: "bg-red-400",
-  ACCESS_GRANTED: "bg-green-400",
-  ACCESS_DENIED: "bg-red-400",
-  BLOCKCHAIN_TX: "bg-amber-400",
-  IPFS_UPLOAD: "bg-blue-300",
-  USER_LOGIN: "bg-gray-400",
-  USER_CREATED: "bg-blue-400",
-  USER_WALLET_LINKED: "bg-violet-400",
-};
+const CATEGORIES = [
+  { id: "all", label: "All Events" },
+  { id: "assets", label: "Assets", icon: Layers },
+  { id: "access", label: "Access & Roles", icon: Key },
+  { id: "members", label: "Members", icon: Users },
+  { id: "chain", label: "Blockchain & IPFS", icon: ShieldCheck },
+] as const;
+
+type CategoryId = (typeof CATEGORIES)[number]["id"];
 
 export function AuditClient({ orgId, orgName, canAnchor, events }: Props) {
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<CategoryId>("all");
+
   const onChainCount = events.filter((e) => e.blockchainTxId).length;
   const ipfsCount = events.filter((e) => e.ipfsCid).length;
   const uniqueActors = new Set(events.map((e) => e.actor?.id).filter(Boolean)).size;
 
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      // Category filter
+      if (activeCategory === "assets") {
+        if (!event.eventType.startsWith("ASSET_") && event.resourceType !== "asset") return false;
+      } else if (activeCategory === "access") {
+        if (
+          !event.eventType.startsWith("ACCESS_") &&
+          !event.eventType.startsWith("ROLE_")
+        )
+          return false;
+      } else if (activeCategory === "members") {
+        if (!event.eventType.startsWith("MEMBER_") && !event.eventType.startsWith("USER_"))
+          return false;
+      } else if (activeCategory === "chain") {
+        if (!event.blockchainTxId && !event.ipfsCid && !event.eventType.includes("BLOCKCHAIN"))
+          return false;
+      }
+
+      // Search query
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const descMatch = event.description?.toLowerCase().includes(q);
+        const typeMatch = event.eventType.toLowerCase().includes(q);
+        const actorMatch = event.actor?.name.toLowerCase().includes(q);
+        const txMatch = event.blockchainTxId?.toLowerCase().includes(q);
+        const cidMatch = event.ipfsCid?.toLowerCase().includes(q);
+        if (!descMatch && !typeMatch && !actorMatch && !txMatch && !cidMatch) return false;
+      }
+
+      return true;
+    });
+  }, [events, activeCategory, search]);
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-white">Audit Trail</h1>
-        <p className="text-sm text-gray-400 mt-0.5">
-          Immutable log of all critical events in {orgName}.
+    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 animate-in fade-in-0 duration-150">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Audit Trail</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          Cryptographically anchored immutable event log for <strong className="text-slate-900 dark:text-slate-200">{orgName}</strong>.
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <StatBox label="Total events" value={events.length} />
-        <StatBox label="On-chain proofs" value={onChainCount} accent="emerald" />
-        <StatBox label="IPFS anchored" value={ipfsCount} accent="blue" />
-        <StatBox label="Unique actors" value={uniqueActors} />
+      {/* Summary Metrics (§19) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard
+          label="Total Logged Events"
+          value={events.length}
+          icon={ScrollText}
+        />
+        <StatCard
+          label="On-Chain Proofs"
+          value={onChainCount}
+          icon={ShieldCheck}
+          accent="emerald"
+        />
+        <StatCard
+          label="IPFS Anchored"
+          value={ipfsCount}
+          icon={FileText}
+          accent="blue"
+        />
+        <StatCard
+          label="Active Actors"
+          value={uniqueActors}
+          icon={Users}
+        />
       </div>
 
-      {/* Algorand status banner */}
+      {/* Status banner */}
       {canAnchor && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl bg-emerald-500/5 border border-emerald-500/15 px-4 py-2.5">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-          <p className="text-xs text-emerald-300">
-            Algorand is connected - you can anchor unproofed events on-chain.
+        <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-4 py-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <p className="text-xs text-emerald-800 dark:text-emerald-300">
+            Algorand TestNet connection active. Critical unproofed audit events can be anchored on-chain with one click.
           </p>
         </div>
       )}
 
+      {/* Filter and Search Bar */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ScrollText className="w-4 h-4 text-gray-400" />
-            Event Log
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {events.length === 0 ? (
-            <div className="flex flex-col items-center py-12 text-center">
-              <ScrollText className="w-10 h-10 text-gray-700 mb-3" />
-              <p className="text-sm text-gray-500">No audit events recorded yet.</p>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Category tabs */}
+            <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06]">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                    activeCategory === cat.id
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/[0.04]"
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
             </div>
+
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                placeholder="Search event log..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-500/60 shadow-xs"
+              />
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {filteredEvents.length === 0 ? (
+            <EmptyState
+              icon={ScrollText}
+              title="No audit events found"
+              description={
+                search || activeCategory !== "all"
+                  ? "Try clearing your search query or switching filters."
+                  : "No events have been recorded for this organization yet."
+              }
+              className="py-12"
+            />
           ) : (
-            <div className="relative px-5 py-4">
-              {/* Vertical timeline line */}
-              <div className="absolute left-[22px] top-0 bottom-0 w-px bg-white/[0.05]" />
-              <ul className="flex flex-col gap-4">
-                {events.map((event) => (
-                  <AuditEventRow
-                    key={event.id}
-                    event={event}
-                    orgId={orgId}
-                    canAnchor={canAnchor && !event.blockchainTxId}
-                  />
-                ))}
-              </ul>
+            <div className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+              {filteredEvents.map((event) => (
+                <AuditEventRow
+                  key={event.id}
+                  event={event}
+                  orgId={orgId}
+                  canAnchor={canAnchor && !event.blockchainTxId}
+                />
+              ))}
             </div>
           )}
         </CardContent>
@@ -125,6 +205,8 @@ export function AuditClient({ orgId, orgName, canAnchor, events }: Props) {
     </div>
   );
 }
+
+// ─── Audit Row Component ──────────────────────────────────────────────────────
 
 function AuditEventRow({
   event,
@@ -140,8 +222,6 @@ function AuditEventRow({
   const [anchored, setAnchored] = useState(!!event.blockchainTxId);
   const [txId, setTxId] = useState(event.blockchainTxId ?? null);
 
-  const dotColor = EVENT_DOT_COLORS[event.eventType] ?? "bg-gray-400";
-
   function handleAnchor() {
     startTransition(async () => {
       const result = await anchorEvent(event.id, orgId);
@@ -149,7 +229,7 @@ function AuditEventRow({
         setAnchored(true);
         setTxId(result.txId);
         toast.success("Event anchored on Algorand", {
-          description: `TX: ${result.txId.slice(0, 20)}…`,
+          description: `TXID: ${result.txId.slice(0, 16)}...`,
         });
         router.refresh();
       } else if (result.status === "skipped") {
@@ -161,117 +241,130 @@ function AuditEventRow({
   }
 
   return (
-    <li className="flex items-start gap-4 relative">
-      <div
-        className={cn(
-          "w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 z-10 ring-2 ring-[#111118]",
-          dotColor
-        )}
-      />
-      <div className="flex-1 min-w-0 pb-4 border-b border-white/[0.04] last:border-0 last:pb-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-white leading-snug">
-              {event.description ?? event.eventType.replace(/_/g, " ")}
-            </p>
-            <div className="flex flex-wrap items-center gap-2 mt-1.5">
-              <Badge variant="default" className="text-[10px] font-mono">
-                {event.eventType}
+    <div className="p-4 sm:p-5 hover:bg-slate-50 dark:hover:bg-white/[0.015] transition-colors space-y-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="space-y-1.5 min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="default" className="text-[10px] font-mono tracking-wider">
+              {event.eventType}
+            </Badge>
+            {anchored && (
+              <Badge variant="success" className="gap-1 text-[10px]">
+                <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                On-Chain Proof
               </Badge>
-              {anchored && (
-                <Badge variant="success" className="text-[10px] gap-1">
-                  <ShieldCheck className="w-2.5 h-2.5" />
-                  On-chain
-                </Badge>
-              )}
-              {event.ipfsCid && (
-                <Badge variant="info" className="text-[10px]">IPFS</Badge>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 mt-1 text-[10px] text-gray-600">
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {relativeTime(event.createdAt)}
-              </span>
-              {event.actor && (
-                <span className="flex items-center gap-1">
-                  <User className="w-3 h-3" />
-                  {event.actor.name}
-                </span>
-              )}
-              {event.resourceType && (
-                <span className="capitalize">{event.resourceType}</span>
-              )}
-            </div>
+            )}
+            {event.ipfsCid && (
+              <Badge variant="info" className="gap-1 text-[10px]">
+                <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                IPFS Anchored
+              </Badge>
+            )}
           </div>
 
-          {/* Right side actions */}
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            {txId ? (
-              <a
-                href={`https://testnet.explorer.perawallet.app/tx/${txId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-500 hover:text-emerald-400 transition-colors"
-                title="View on Pera Explorer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            ) : canAnchor ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                loading={isPending}
-                onClick={handleAnchor}
-                icon={<Zap className="w-3 h-3" />}
-                className="text-[10px] px-2 py-1 h-auto"
-              >
-                Anchor
-              </Button>
-            ) : null}
+          <p className="text-xs font-medium text-slate-900 dark:text-white leading-relaxed">
+            {event.description ?? event.eventType.replace(/_/g, " ")}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {relativeTime(event.createdAt)}
+            </span>
+            {event.actor && (
+              <span className="flex items-center gap-1">
+                <User className="w-3 h-3" />
+                {event.actor.name}
+              </span>
+            )}
+            {event.resourceType && (
+              <span className="capitalize">
+                Resource: {event.resourceType}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Blockchain TX */}
-        {txId && (
-          <div className="mt-2 flex items-center gap-1.5 bg-white/[0.03] rounded-lg px-2.5 py-1.5">
-            <span className="text-[10px] text-gray-500">TX:</span>
-            <span className="text-[10px] font-mono text-gray-300 truncate flex-1">
-              {txId}
-            </span>
+        {/* Action / Anchor button */}
+        <div className="flex items-center gap-2 shrink-0">
+          {canAnchor && !anchored && (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={isPending}
+              onClick={handleAnchor}
+              icon={<Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />}
+              className="text-xs border-amber-300 dark:border-amber-500/20 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+            >
+              Anchor On-Chain
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* On-Chain Transaction Drawer if anchored */}
+      {txId && (
+        <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04] text-[11px] font-mono text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-slate-400 dark:text-slate-500 shrink-0">TX:</span>
+            <span className="truncate text-slate-700 dark:text-slate-300">{txId}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <CopyButton value={txId} />
             <a
               href={`https://testnet.explorer.perawallet.app/tx/${txId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-500 hover:text-emerald-400 transition-colors shrink-0"
+              className="p-1 rounded text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              title="View on Algorand Explorer"
             >
-              <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
-        )}
-      </div>
-    </li>
+        </div>
+      )}
+    </div>
   );
 }
 
-function StatBox({
+// ─── Stat Card Component ──────────────────────────────────────────────────────
+
+function StatCard({
   label,
   value,
+  icon: Icon,
   accent,
 }: {
   label: string;
   value: number;
+  icon: React.ElementType;
   accent?: "emerald" | "blue";
 }) {
-  const accentCls = accent === "emerald"
-    ? "border-emerald-500/10 from-emerald-600/8 to-emerald-600/3"
-    : accent === "blue"
-    ? "border-blue-500/10 from-blue-600/8 to-blue-600/3"
-    : "border-white/[0.06] from-white/[0.03] to-transparent";
   return (
-    <div className={cn("rounded-xl border bg-gradient-to-br p-4", accentCls)}>
-      <p className="text-2xl font-bold text-white">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    <div
+      className={cn(
+        "p-4 rounded-2xl border bg-white dark:bg-[#0f1017] transition-all shadow-xs",
+        accent === "emerald"
+          ? "border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-500/[0.02]"
+          : accent === "blue"
+          ? "border-blue-200 dark:border-blue-500/20 bg-blue-50/30 dark:bg-blue-500/[0.02]"
+          : "border-slate-200 dark:border-white/[0.06]"
+      )}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
+        <Icon
+          className={cn(
+            "w-4 h-4",
+            accent === "emerald"
+              ? "text-emerald-600 dark:text-emerald-400"
+              : accent === "blue"
+              ? "text-blue-600 dark:text-blue-400"
+              : "text-slate-400 dark:text-slate-500"
+          )}
+        />
+      </div>
+      <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{value}</p>
     </div>
   );
 }

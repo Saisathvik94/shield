@@ -9,16 +9,21 @@ import Link from "next/link";
 import {
   Building2,
   Plus,
-  ShieldIcon,
+  Shield,
   Activity,
   Fingerprint,
   Package,
   ArrowRight,
   Mail,
+  ShieldCheck,
+  CheckCircle2,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { relativeTime, roleColor } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { relativeTime, roleColor, shortAddress, cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -34,7 +39,7 @@ export default async function DashboardPage() {
 
   // Grab audit events from the first org for quick activity feed
   const recentActivity =
-    orgs.length > 0 ? await getOrgAuditEvents(orgs[0].id, 8) : [];
+    orgs.length > 0 ? await getOrgAuditEvents(orgs[0].id, 6) : [];
 
   const walletAddress = user?.walletIdentities?.[0]?.walletAddress;
   const hour = new Date().getHours();
@@ -42,140 +47,155 @@ export default async function DashboardPage() {
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-white">
-          {greeting}, {session.user.name?.split(" ")[0]} 👋
-        </h1>
-        <p className="text-gray-400 mt-1 text-sm">
-          Your SHIELD dashboard - identity, organizations, assets.
-        </p>
+    <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in-0 duration-150">
+      {/* Welcome & Security Status Banner (§10) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-white/[0.06] pb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              {greeting}, {session.user.name?.split(" ")[0]}
+            </h1>
+            <span className="text-xl">👋</span>
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Enterprise digital trust overview for your identity, organizations, and protected assets.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span>Organization Trust Status: Active &amp; Secure</span>
+          </div>
+        </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <StatCard
-          icon={<Building2 className="w-5 h-5 text-blue-400" />}
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <MetricCard
+          icon={<Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
           label="Organizations"
           value={orgs.length}
+          subtext={`${orgs.filter((o) => o.role === "OWNER" || o.role === "ADMIN").length} Managed as Admin`}
           accent="blue"
         />
-        <StatCard
-          icon={<Fingerprint className="w-5 h-5 text-violet-400" />}
-          label="Identity"
+        <MetricCard
+          icon={<Fingerprint className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+          label="Digital Identity"
           value={walletAddress ? "Verified" : "Incomplete"}
-          accent="violet"
+          subtext={walletAddress ? `Algorand: ${shortAddress(walletAddress, 4)}` : "Connect Pera Wallet"}
+          accent="indigo"
         />
-        <StatCard
-          icon={<Package className="w-5 h-5 text-emerald-400" />}
-          label="Assets"
-          value="-"
+        <MetricCard
+          icon={<ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
+          label="Trust Layer"
+          value="Algorand"
+          subtext="Cryptographic Audits Enabled"
           accent="emerald"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {pendingInvitations.length > 0 && (
-          <Card className="lg:col-span-2 border-amber-500/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-amber-400" />
-                Pending invitations
-                <Badge className="ml-auto text-amber-300 bg-amber-500/10">
-                  {pendingInvitations.length}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ul className="divide-y divide-white/[0.04]">
-                {pendingInvitations.map((invitation) => (
-                  <li
-                    key={invitation.id}
-                    className="flex items-center gap-3 px-5 py-3"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                      <Building2 className="w-4 h-4 text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white font-medium truncate">
-                        {invitation.organization.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {invitation.role} access · expires {invitation.expiresAt.toLocaleDateString("en-GB")}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/invite/${invitation.token}`}
-                      className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 transition-colors shrink-0"
-                    >
-                      Review invitation
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
+      {/* Pending Invitations Banner (If Any) */}
+      {pendingInvitations.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5 p-5">
+          <div className="flex items-center justify-between gap-4 mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center text-amber-700 dark:text-amber-400">
+                <Mail className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Pending Organization Invitations ({pendingInvitations.length})
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  You have been invited to collaborate with secure access roles.
+                </p>
+              </div>
+            </div>
+          </div>
 
-        {/* Organizations */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {pendingInvitations.map((invitation) => (
+              <div
+                key={invitation.id}
+                className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-white dark:bg-[#12131d] border border-slate-200 dark:border-white/[0.06] shadow-xs"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                    {invitation.organization.name}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Role: <span className="text-amber-700 dark:text-amber-300 font-medium">{invitation.role}</span> · Expires{" "}
+                    {invitation.expiresAt.toLocaleDateString()}
+                  </p>
+                </div>
+                <Button variant="primary" size="sm" asChild>
+                  <Link href={`/invite/${invitation.token}`}>
+                    Review <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid: Organizations & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Organizations Section */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Organizations</CardTitle>
-              <Link
-                href="/dashboard/orgs/new"
-                className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                New
-              </Link>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  Organizations
+                </CardTitle>
+                <CardDescription>
+                  Multi-tenant organizational workspaces and role assignments
+                </CardDescription>
+              </div>
+              <Button variant="secondary" size="sm" asChild>
+                <Link href="/dashboard/orgs/new">
+                  <Plus className="w-3.5 h-3.5 mr-1" /> New Org
+                </Link>
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             {orgs.length === 0 ? (
-              <div className="flex flex-col items-center py-10 px-5 text-center">
-                <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-3">
-                  <Building2 className="w-6 h-6 text-blue-400" />
-                </div>
-                <p className="text-sm text-gray-300 font-medium mb-1">
-                  No organizations yet
-                </p>
-                <p className="text-xs text-gray-500 mb-4">
-                  Create one or accept an invitation to get started.
-                </p>
-                <Link
-                  href="/dashboard/orgs/new"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs rounded-lg hover:bg-blue-600/30 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Create organization
-                </Link>
+              <div className="p-6">
+                <EmptyState
+                  icon={Building2}
+                  title="No Organizations Yet"
+                  description="Create an organization to begin managing departments, assets, and role-based permissions."
+                  actionText="Create Organization"
+                  actionHref="/dashboard/orgs/new"
+                />
               </div>
             ) : (
-              <ul className="divide-y divide-white/[0.04]">
+              <ul className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {orgs.map((org) => (
                   <li key={org.id}>
                     <Link
                       href={`/dashboard/orgs/${org.id}`}
-                      className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-colors group"
+                      className="flex items-center gap-3.5 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600/20 to-violet-600/20 border border-white/[0.08] flex items-center justify-center text-sm font-bold text-blue-200 shrink-0">
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-white/[0.08] flex items-center justify-center text-sm font-bold text-blue-700 dark:text-blue-200 shrink-0">
                         {org.name.slice(0, 1).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white font-medium truncate">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors truncate">
                           {org.name}
                         </p>
-                        <p className="text-xs text-gray-500 font-mono truncate">
-                          {org.slug}
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
+                          slug: {org.slug}
                         </p>
                       </div>
-                      <Badge className={roleColor(org.role)}>
+                      <span className={cn("text-[11px] px-2.5 py-0.5 rounded-full font-medium border", roleColor(org.role))}>
                         {org.role}
-                      </Badge>
-                      <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
+                      </span>
+                      <ArrowRight className="w-4 h-4 text-slate-400 dark:text-slate-600 group-hover:text-slate-700 dark:group-hover:text-slate-300 group-hover:translate-x-0.5 transition-all shrink-0" />
                     </Link>
                   </li>
                 ))}
@@ -184,41 +204,57 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent activity */}
+        {/* Recent Audit & Activity Section */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Recent Activity</CardTitle>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  Recent Audit Activity
+                </CardTitle>
+                <CardDescription>
+                  Chronological event stream with immutable blockchain verification
+                </CardDescription>
+              </div>
               {orgs.length > 0 && (
                 <Link
                   href={`/dashboard/orgs/${orgs[0].id}/audit`}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline transition-colors font-medium"
                 >
-                  View all
+                  View All →
                 </Link>
               )}
             </div>
           </CardHeader>
           <CardContent className="p-0">
             {recentActivity.length === 0 ? (
-              <div className="flex flex-col items-center py-10 text-center">
-                <Activity className="w-8 h-8 text-gray-600 mb-2" />
-                <p className="text-sm text-gray-500">No activity yet</p>
+              <div className="p-6">
+                <EmptyState
+                  icon={Activity}
+                  title="No Recent Activity"
+                  description="Security actions, asset changes, and member updates will be logged here with cryptographic proof."
+                />
               </div>
             ) : (
-              <ul className="divide-y divide-white/[0.04]">
+              <ul className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {recentActivity.map((event) => (
-                  <li key={event.id} className="flex items-start gap-3 px-5 py-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0" />
+                  <li key={event.id} className="flex items-start gap-3 px-5 py-3.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 mt-1.5 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-300 truncate">
+                      <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
                         {event.description ?? event.eventType.replace(/_/g, " ")}
                       </p>
-                      <p className="text-[10px] text-gray-600 mt-0.5">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         {relativeTime(event.createdAt)}
-                        {event.actor?.name ? ` · ${event.actor.name}` : ""}
+                        {event.actor?.name ? ` · Actor: ${event.actor.name}` : ""}
                       </p>
                     </div>
+                    {event.blockchainTxId && (
+                      <Badge variant="success" className="text-[10px] shrink-0 font-mono">
+                        On-Chain
+                      </Badge>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -227,61 +263,71 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Identity card */}
-      <Card className="mt-6">
-        <CardContent className="flex items-center gap-5 py-5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-600/20 to-blue-600/20 border border-white/[0.08] flex items-center justify-center shrink-0">
-            <ShieldIcon className="w-6 h-6 text-violet-300" strokeWidth={1.5} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white">
-              Global SHIELD Identity
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5 font-mono truncate">
-              {user?.did ?? "DID not yet generated"}
-            </p>
-            {walletAddress && (
-              <p className="text-xs text-gray-500 font-mono truncate mt-0.5">
-                Wallet: {walletAddress.slice(0, 12)}…{walletAddress.slice(-6)}
+      {/* Global SHIELD Identity Card (§11 & §12) */}
+      <Card className="border-blue-200 dark:border-blue-500/20 bg-gradient-to-r from-blue-50 via-white to-indigo-50 dark:from-blue-950/20 dark:via-[#0f1017] dark:to-indigo-950/20">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 py-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-600/30 border border-blue-200 dark:border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-300 shrink-0 shadow-sm">
+              <Shield className="w-6 h-6" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Global Decentralized Identity</h3>
+                <StatusBadge status="ACTIVE" label="Verified Identity" size="sm" />
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 font-mono truncate max-w-md">
+                DID: {user?.did || "did:shield:user:pending"}
               </p>
-            )}
+              {walletAddress && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                  Algorand Access Wallet: {shortAddress(walletAddress, 6)}
+                </p>
+              )}
+            </div>
           </div>
-          <Link
-            href="/dashboard/identity"
-            className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors shrink-0"
-          >
-            View identity
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+
+          <Button variant="primary" size="sm" asChild className="shrink-0">
+            <Link href="/dashboard/identity">
+              Manage Identity &amp; Keys <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function StatCard({
+function MetricCard({
   icon,
   label,
   value,
+  subtext,
   accent,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
-  accent: "blue" | "violet" | "emerald";
+  subtext: string;
+  accent: "blue" | "indigo" | "emerald";
 }) {
   const accentClasses = {
-    blue: "from-blue-600/10 to-blue-600/5 border-blue-500/10",
-    violet: "from-violet-600/10 to-violet-600/5 border-violet-500/10",
-    emerald: "from-emerald-600/10 to-emerald-600/5 border-emerald-500/10",
+    blue: "border-blue-200 dark:border-blue-500/20 bg-white dark:bg-[#0f1019]",
+    indigo: "border-indigo-200 dark:border-indigo-500/20 bg-white dark:bg-[#0f1019]",
+    emerald: "border-emerald-200 dark:border-emerald-500/20 bg-white dark:bg-[#0f1019]",
   };
+
   return (
-    <div
-      className={`rounded-xl bg-gradient-to-br border p-4 ${accentClasses[accent]}`}
-    >
-      <div className="flex items-center gap-2 mb-2">{icon}</div>
-      <p className="text-2xl font-bold text-white">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    <div className={cn("rounded-2xl border p-5 transition-all shadow-xs", accentClasses[accent])}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          {label}
+        </span>
+        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] flex items-center justify-center">
+          {icon}
+        </div>
+      </div>
+      <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{value}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">{subtext}</p>
     </div>
   );
 }

@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
-  ShieldIcon,
+  Shield,
   Building2,
   Users,
   AlertCircle,
   CheckCircle2,
-  Loader2,
+  Layers,
+  ArrowRight,
 } from "lucide-react";
 import { acceptInvitation } from "@/lib/actions/invite-actions";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { roleColor, cn } from "@/lib/utils";
 
 interface InviteData {
   id: string;
@@ -44,9 +48,7 @@ export function InviteClient({
         router.push(`/dashboard`);
         router.refresh();
       } else if (result.status === "needs_login") {
-        router.push(
-          `/login?callbackUrl=/invite/${invitation.token}`
-        );
+        router.push(`/login?callbackUrl=/invite/${invitation.token}`);
       } else {
         toast.error(result.message);
       }
@@ -56,110 +58,104 @@ export function InviteClient({
   if (invitation.expired) {
     return (
       <div className="w-full max-w-md">
-        <div className="bg-[#111118] border border-white/[0.06] rounded-2xl p-6 text-center">
-          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <h2 className="text-lg font-semibold text-white mb-1">
-            Invitation expired
-          </h2>
-          <p className="text-sm text-gray-400">
-            This invitation link has expired. Ask an admin to resend it.
-          </p>
+        <div className="bg-white dark:bg-[#0f1017] border border-rose-500/30 rounded-2xl p-6 text-center space-y-4 shadow-xl shadow-slate-200/50 dark:shadow-none">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto">
+            <AlertCircle className="w-6 h-6 text-rose-500 dark:text-rose-400" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Invitation Expired</h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              This institutional invitation link has expired. Please request an administrator to issue a new invite.
+            </p>
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+            >
+              Return to SHIELD Home
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-md">
-      {/* Logo */}
-      <div className="flex flex-col items-center mb-6">
-        <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 shadow-lg shadow-blue-500/25 mb-3">
-          <ShieldIcon className="w-6 h-6 text-white" strokeWidth={1.5} />
+    <div className="w-full max-w-md space-y-6">
+      {/* Header Branding */}
+      <div className="text-center space-y-2">
+        <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
+          <Shield className="w-6 h-6 text-white" />
         </div>
-        <h1 className="text-xl font-semibold text-white">You&apos;ve been invited</h1>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Organization Invitation</h1>
+        <p className="text-xs text-slate-600 dark:text-slate-400">
+          You have been invited to join an institutional security workspace.
+        </p>
       </div>
 
-      <div className="bg-[#111118] border border-white/[0.06] rounded-2xl p-6 flex flex-col gap-5">
-        {/* Org card */}
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600/30 to-violet-600/30 border border-white/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-5 h-5 text-blue-300" />
+      {/* Main Card */}
+      <div className="rounded-2xl bg-white dark:bg-[#0f1017] border border-slate-200 dark:border-white/[0.08] p-6 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-5">
+        {/* Org Banner */}
+        <div className="flex items-center gap-3.5 p-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06]">
+          <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+            <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
-          <div>
-            <p className="text-white font-semibold">{invitation.organizationName}</p>
-            <p className="text-xs text-gray-400 mt-0.5">Organization</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{invitation.organizationName}</p>
+            <p className="text-[11px] text-slate-500">Institutional Workspace</p>
           </div>
         </div>
 
-        {/* Role + scope */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/[0.05] px-3 py-2">
-            <span className="text-xs text-gray-400 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" /> Role
+        {/* Role & Scope Details */}
+        <div className="space-y-2 text-xs">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04]">
+            <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" /> Assigned Role
             </span>
-            <span className="text-xs font-semibold text-blue-300 uppercase tracking-wide">
+            <Badge className={cn("text-xs font-semibold", roleColor(invitation.role))}>
               {invitation.role}
-            </span>
+            </Badge>
           </div>
 
           {invitation.departmentName && (
-            <div className="flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/[0.05] px-3 py-2">
-              <span className="text-xs text-gray-400">Department</span>
-              <span className="text-xs text-white">{invitation.departmentName}</span>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04]">
+              <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" /> Department
+              </span>
+              <span className="text-slate-900 dark:text-white font-medium">{invitation.departmentName}</span>
             </div>
           )}
 
           {invitation.sectionName && (
-            <div className="flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/[0.05] px-3 py-2">
-              <span className="text-xs text-gray-400">Section</span>
-              <span className="text-xs text-white">{invitation.sectionName}</span>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/70 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.04]">
+              <span className="text-slate-600 dark:text-slate-400">Section</span>
+              <span className="text-slate-900 dark:text-white font-medium">{invitation.sectionName}</span>
             </div>
           )}
         </div>
 
+        {/* Account Note if logged in with different email */}
         {currentUserEmail &&
           currentUserEmail.toLowerCase() !== invitation.email.toLowerCase() && (
-            <div className="flex items-start gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3">
-              <AlertCircle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-300">
-                This invitation was sent to{" "}
-                <span className="font-semibold">{invitation.email}</span>, but
-                you&apos;re signed in as{" "}
-                <span className="font-semibold">{currentUserEmail}</span>. You
-                can still accept it - the membership will be linked to your
-                current account.
+            <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-3 text-xs">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-amber-800 dark:text-amber-300/90 leading-relaxed text-[11px]">
+                Invited email: <span className="font-semibold text-slate-900 dark:text-white">{invitation.email}</span>. You are logged in as <span className="font-semibold text-slate-900 dark:text-white">{currentUserEmail}</span>. Accepting will associate this membership with your active wallet.
               </p>
             </div>
           )}
 
-        <button
+        <Button
+          type="button"
+          variant="primary"
           onClick={handleAccept}
-          disabled={isPending}
-          className={cn(
-            "flex items-center justify-center gap-2 w-full rounded-xl px-4 py-3",
-            "font-medium text-sm transition-all",
-            "bg-gradient-to-r from-blue-600 to-violet-600 text-white",
-            "hover:from-blue-500 hover:to-violet-500",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-            "shadow-lg shadow-blue-500/20"
-          )}
+          loading={isPending}
+          icon={<CheckCircle2 className="w-4 h-4" />}
+          className="w-full py-3 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/20"
         >
-          {isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Accepting…
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="w-4 h-4" />
-              Accept Invitation
-            </>
-          )}
-        </button>
-
-        <p className="text-center text-xs text-gray-500">
-          Expires {new Date(invitation.expiresAt).toLocaleDateString("en-GB")}
-        </p>
+          {isPending ? "Joining Workspace..." : "Accept Invitation & Enter"}
+        </Button>
       </div>
     </div>
   );

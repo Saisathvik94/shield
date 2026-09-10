@@ -9,7 +9,6 @@ import {
   Wallet,
   Search,
   Mail,
-  Link,
   Copy,
   CheckCircle2,
   MoreHorizontal,
@@ -18,6 +17,8 @@ import {
   Clock,
   Send,
   Trash2,
+  Building2,
+  X,
 } from "lucide-react";
 import { sendInvitation } from "@/lib/actions/invite-actions";
 import {
@@ -26,11 +27,14 @@ import {
   revokeInvitation,
 } from "@/lib/actions/member-actions";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { roleColor, relativeTime, shortAddress, cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/empty-state";
+import { CopyButton } from "@/components/dashboard/copy-button";
+import { roleColor, relativeTime, shortAddress, cn, copyWithToast } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -73,7 +77,12 @@ interface Props {
   pendingInvites: PendingInvite[];
 }
 
-const ALL_ROLES = ["USER", "AUDITOR", "MANAGER", "ADMIN"] as const;
+const ALL_ROLES = [
+  { role: "USER", label: "User / Member", desc: "Basic access to view assigned assets and request approvals" },
+  { role: "AUDITOR", label: "Auditor", desc: "Read-only access to inspect all assets, audit proofs, and records" },
+  { role: "MANAGER", label: "Manager", desc: "Can manage department assets, approve transfers, and view team logs" },
+  { role: "ADMIN", label: "Administrator", desc: "Full authority over assets, member invites, structure, and anchors" },
+] as const;
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -89,28 +98,32 @@ export function MembersClient({
 }: Props) {
   const [tab, setTab] = useState<"members" | "invitations">("members");
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  const filteredMembers = members.filter(
-    (m) =>
+  const filteredMembers = members.filter((m) => {
+    const matchesSearch =
       m.user.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.user.email.toLowerCase().includes(search.toLowerCase())
-  );
+      m.user.email.toLowerCase().includes(search.toLowerCase());
+    const matchesRole = roleFilter === "ALL" || m.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 animate-in fade-in-0 duration-150">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-white/[0.06] pb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Members</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {members.length} member{members.length !== 1 ? "s" : ""} in {orgName}
-            {pendingInvites.length > 0 && (
-              <span className="ml-2 text-amber-400">
-                · {pendingInvites.length} pending invite
-                {pendingInvites.length !== 1 ? "s" : ""}
-              </span>
-            )}
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Members &amp; Access Control
+            </h1>
+            <Badge variant="neutral" className="text-xs">
+              {members.length} Active
+            </Badge>
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            Manage organizational personnel, role scopes, and department assignments in <strong className="text-slate-900 dark:text-slate-200">{orgName}</strong>.
           </p>
         </div>
 
@@ -118,12 +131,12 @@ export function MembersClient({
           <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
             <DialogTrigger asChild>
               <Button variant="primary" icon={<UserPlus className="w-4 h-4" />}>
-                Invite member
+                Invite Member
               </Button>
             </DialogTrigger>
             <DialogContent
-              title="Invite member"
-              description={`Create an invitation link to join ${orgName}.`}
+              title="Invite New Member"
+              description={`Issue a secure cryptographic invitation link to join ${orgName}.`}
             >
               <InviteForm
                 orgId={orgId}
@@ -135,48 +148,100 @@ export function MembersClient({
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-white/[0.04] rounded-lg p-1 w-fit">
-        <TabButton active={tab === "members"} onClick={() => setTab("members")}>
-          <Users className="w-3.5 h-3.5" />
-          Members ({members.length})
-        </TabButton>
-        <TabButton
-          active={tab === "invitations"}
-          onClick={() => setTab("invitations")}
-        >
-          <Mail className="w-3.5 h-3.5" />
-          Invitations
-          {pendingInvites.length > 0 && (
-            <span className="ml-1 bg-amber-500/20 text-amber-300 text-[10px] px-1.5 py-0.5 rounded-full">
-              {pendingInvites.length}
-            </span>
-          )}
-        </TabButton>
+      {/* Segmented Tabs & Filters */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] rounded-xl p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => setTab("members")}
+            className={cn(
+              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+              tab === "members"
+                ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            )}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Members ({members.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("invitations")}
+            className={cn(
+              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+              tab === "invitations"
+                ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            )}
+          >
+            <Mail className="w-3.5 h-3.5" />
+            <span>Invitations</span>
+            {pendingInvites.length > 0 && (
+              <span className="ml-1 bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] px-1.5 py-0.2 rounded-full border border-amber-200 dark:border-amber-500/30">
+                {pendingInvites.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {tab === "members" && (
+          <div className="flex items-center gap-2">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="bg-white dark:bg-[#12131d] border border-slate-200 dark:border-white/[0.06] text-xs text-slate-700 dark:text-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-500/40 shadow-xs"
+            >
+              <option value="ALL">All Roles ({members.length})</option>
+              <option value="OWNER">Owner</option>
+              <option value="ADMIN">Admin</option>
+              <option value="MANAGER">Manager</option>
+              <option value="AUDITOR">Auditor</option>
+              <option value="USER">User / Member</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {tab === "members" && (
-        <>
-          {/* Search */}
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <div className="space-y-4">
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              placeholder="Search members…"
+              type="text"
+              placeholder="Search members by name, email, or wallet..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-[#111118] border border-white/[0.06] rounded-lg text-sm text-white placeholder:text-gray-500 outline-none focus:border-blue-500/40 transition-colors"
+              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-[#0f1017] border border-slate-200 dark:border-white/[0.07] rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all shadow-xs"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white p-0.5 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
+          {/* Members List Card */}
           <Card>
             <CardContent className="p-0">
               {filteredMembers.length === 0 ? (
-                <EmptyState
-                  icon={<Users className="w-10 h-10 text-gray-700" />}
-                  message={search ? "No members match your search." : "No members yet."}
-                />
+                <div className="p-8">
+                  <EmptyState
+                    icon={Users}
+                    title={search || roleFilter !== "ALL" ? "No Matching Members" : "No Members Found"}
+                    description={
+                      search || roleFilter !== "ALL"
+                        ? "Try adjusting your search criteria or clearing active filters."
+                        : "Invite personnel to build your organization hierarchy."
+                    }
+                  />
+                </div>
               ) : (
-                <ul className="divide-y divide-white/[0.04]">
+                <ul className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                   {filteredMembers.map((m) => (
                     <MemberRow
                       key={m.id}
@@ -191,7 +256,7 @@ export function MembersClient({
               )}
             </CardContent>
           </Card>
-        </>
+        </div>
       )}
 
       {tab === "invitations" && (
@@ -205,7 +270,7 @@ export function MembersClient({
   );
 }
 
-// ─── Member row ───────────────────────────────────────────────────────────────
+// ─── Member Row Component ──────────────────────────────────────────────────────
 
 function MemberRow({
   member,
@@ -227,7 +292,11 @@ function MemberRow({
 
   const isSelf = member.userId === currentUserId;
   const ROLE_RANK: Record<string, number> = {
-    USER: 0, AUDITOR: 1, MANAGER: 2, ADMIN: 3, OWNER: 4,
+    USER: 0,
+    AUDITOR: 1,
+    MANAGER: 2,
+    ADMIN: 3,
+    OWNER: 4,
   };
   const canModify =
     canManage &&
@@ -243,7 +312,7 @@ function MemberRow({
         newRole as "OWNER" | "ADMIN" | "MANAGER" | "AUDITOR" | "USER"
       );
       if (result.status === "success") {
-        toast.success(`Role changed to ${newRole}`);
+        toast.success(`Role updated to ${newRole}`);
         router.refresh();
       } else {
         toast.error(result.message);
@@ -253,11 +322,13 @@ function MemberRow({
   }
 
   function handleRemove() {
-    if (!confirm(`Remove ${member.user.name} from this organization?`)) return;
+    if (!confirm(`Are you sure you want to remove ${member.user.name} from this organization?`)) {
+      return;
+    }
     startRemoveTransition(async () => {
       const result = await removeMember(member.id, orgId);
       if (result.status === "success") {
-        toast.success(`${member.user.name} removed`);
+        toast.success(`${member.user.name} removed from organization`);
         router.refresh();
       } else {
         toast.error(result.message);
@@ -267,47 +338,57 @@ function MemberRow({
   }
 
   return (
-    <li className="flex items-center gap-3 px-5 py-3.5 relative">
+    <li className="flex items-center gap-4 px-5 py-4 relative hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
       {/* Avatar */}
-      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600/20 to-violet-600/20 border border-white/[0.08] flex items-center justify-center text-sm font-bold text-blue-200 shrink-0">
+      <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-white/[0.08] flex items-center justify-center text-sm font-bold text-blue-700 dark:text-blue-200 shrink-0">
         {member.user.name?.slice(0, 1)?.toUpperCase() ?? "?"}
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-white font-medium truncate">
-          {member.user.name}
-          {isSelf && <span className="ml-1 text-[10px] text-gray-500">(you)</span>}
-        </p>
-        <p className="text-xs text-gray-500 truncate">{member.user.email}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{member.user.name}</p>
+          {isSelf && (
+            <span className="text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-1.5 py-0.2 rounded font-medium">
+              You
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{member.user.email}</p>
         {member.user.wallet && (
-          <p className="text-[10px] text-gray-600 font-mono flex items-center gap-1 mt-0.5">
-            <Wallet className="w-3 h-3" />
-            {shortAddress(member.user.wallet)}
-          </p>
+          <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+            <Wallet className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="truncate">{shortAddress(member.user.wallet, 5)}</span>
+            <CopyButton text={member.user.wallet} label="Wallet Address" />
+          </div>
         )}
       </div>
 
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <Badge className={roleColor(member.role)}>{member.role}</Badge>
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <span className={cn("text-[11px] px-2.5 py-0.5 rounded-full font-semibold border", roleColor(member.role))}>
+          {member.role}
+        </span>
         {member.department && (
-          <span className="text-[10px] text-gray-500">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            <Building2 className="w-3 h-3 text-slate-400 dark:text-slate-500" />
             {member.department}
-            {member.section ? ` → ${member.section}` : ""}
+            {member.section ? ` · ${member.section}` : ""}
           </span>
         )}
         {member.joinedAt && (
-          <span className="text-[10px] text-gray-600">
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">
             Joined {relativeTime(member.joinedAt)}
           </span>
         )}
       </div>
 
-      {/* Actions menu */}
+      {/* Actions Menu */}
       {canModify && (
         <div className="relative ml-2 shrink-0">
           <button
+            type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06] transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-colors"
+            title="Member actions"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
@@ -315,37 +396,39 @@ function MemberRow({
           {menuOpen && (
             <>
               <div
-                className="fixed inset-0 z-10"
+                className="fixed inset-0 z-20"
                 onClick={() => setMenuOpen(false)}
               />
-              <div className="absolute right-0 top-8 z-20 w-52 bg-[#1a1a24] border border-white/[0.08] rounded-xl shadow-2xl py-1.5 overflow-hidden">
-                <p className="text-[10px] text-gray-500 px-3 py-1 uppercase tracking-wider">
-                  Change role
+              <div className="absolute right-0 top-8 z-30 w-56 bg-white dark:bg-[#141520] border border-slate-200 dark:border-white/[0.1] rounded-xl shadow-2xl p-1.5 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100">
+                <p className="text-[10px] font-semibold text-slate-400 px-3 py-1.5 uppercase tracking-wider">
+                  Update Role Scope
                 </p>
                 {ALL_ROLES.filter(
                   (r) =>
-                    r !== member.role &&
+                    r.role !== member.role &&
                     (currentUserRole === "OWNER" ||
-                      ROLE_RANK[r] < ROLE_RANK[currentUserRole])
-                ).map((role) => (
+                      ROLE_RANK[r.role] < ROLE_RANK[currentUserRole])
+                ).map((item) => (
                   <button
-                    key={role}
-                    onClick={() => handleRoleChange(role)}
+                    key={item.role}
+                    type="button"
+                    onClick={() => handleRoleChange(item.role)}
                     disabled={rolePending}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-colors"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors text-left"
                   >
-                    <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-                    Set as {role}
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>Set as {item.role}</span>
                   </button>
                 ))}
-                <div className="border-t border-white/[0.06] mt-1 pt-1">
+                <div className="border-t border-slate-100 dark:border-white/[0.06] mt-1 pt-1">
                   <button
+                    type="button"
                     onClick={handleRemove}
                     disabled={removePending}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors text-left"
                   >
-                    <UserMinus className="w-3.5 h-3.5" />
-                    Remove member
+                    <UserMinus className="w-3.5 h-3.5 shrink-0" />
+                    <span>Remove Member</span>
                   </button>
                 </div>
               </div>
@@ -357,7 +440,7 @@ function MemberRow({
   );
 }
 
-// ─── Invitations tab ──────────────────────────────────────────────────────────
+// ─── Invitations Tab Component ─────────────────────────────────────────────────
 
 function InvitationsTab({
   orgId,
@@ -372,11 +455,13 @@ function InvitationsTab({
   const [revokePending, startRevoke] = useTransition();
 
   function handleRevoke(inviteId: string, email: string) {
-    if (!confirm(`Revoke invitation for ${email}?`)) return;
+    if (!confirm(`Are you sure you want to revoke the invitation for ${email}?`)) {
+      return;
+    }
     startRevoke(async () => {
       const result = await revokeInvitation(inviteId, orgId);
       if (result.status === "success") {
-        toast.success("Invitation revoked");
+        toast.success("Invitation revoked successfully");
         router.refresh();
       } else {
         toast.error(result.message);
@@ -387,10 +472,11 @@ function InvitationsTab({
   if (pendingInvites.length === 0) {
     return (
       <Card>
-        <CardContent>
+        <CardContent className="p-8">
           <EmptyState
-            icon={<Mail className="w-10 h-10 text-gray-700" />}
-            message="No pending invitations."
+            icon={Mail}
+            title="No Pending Invitations"
+            description="There are currently no active invitation tokens waiting to be accepted."
           />
         </CardContent>
       </Card>
@@ -400,13 +486,16 @@ function InvitationsTab({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-amber-400" />
-          Pending Invitations
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          Pending Invitations ({pendingInvites.length})
         </CardTitle>
+        <CardDescription>
+          Active single-use invitation tokens generated for prospective team members
+        </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
-        <ul className="divide-y divide-white/[0.04]">
+        <ul className="divide-y divide-slate-100 dark:divide-white/[0.04]">
           {pendingInvites.map((inv) => (
             <InviteRow
               key={inv.id}
@@ -433,86 +522,57 @@ function InviteRow({
   onRevoke: () => void;
   revokePending: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
   const inviteUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/invite/${invite.token}`
       : `/invite/${invite.token}`;
 
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast.success("Invite link copied!");
-    } catch {
-      toast.error("Failed to copy link.");
-    }
+  function handleCopy() {
+    copyWithToast(inviteUrl, "Invitation URL");
   }
 
-  const expired = new Date(invite.expiresAt) < new Date();
-
   return (
-    <li className="flex items-start gap-3 px-5 py-3.5">
-      <div className="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-        <Mail className="w-4 h-4 text-amber-400" />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-white font-medium truncate">{invite.email}</p>
-        <div className="flex flex-wrap items-center gap-2 mt-1">
-          <Badge className={roleColor(invite.role)}>{invite.role}</Badge>
-          {invite.departmentName && (
-            <span className="text-[10px] text-gray-500">
-              {invite.departmentName}
-              {invite.sectionName ? ` → ${invite.sectionName}` : ""}
-            </span>
-          )}
-        </div>
-        <p className="text-[10px] text-gray-600 mt-1">
-          Invited by {invite.invitedByName ?? "Admin"} ·{" "}
-          {expired ? (
-            <span className="text-red-400">Expired</span>
-          ) : (
-            <>Expires {relativeTime(invite.expiresAt)}</>
-          )}
-        </p>
-
-        {/* Invite link box */}
-        <div className="mt-2 flex items-center gap-1.5 bg-white/[0.04] rounded-lg px-2.5 py-1.5">
-          <Link className="w-3 h-3 text-gray-500 shrink-0" />
-          <span className="text-[10px] font-mono text-gray-400 truncate flex-1">
-            /invite/{invite.token.slice(0, 16)}…
+    <li className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-4 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{invite.email}</p>
+          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium border", roleColor(invite.role))}>
+            {invite.role}
           </span>
-          <button
-            onClick={handleCopy}
-            className="text-gray-500 hover:text-white transition-colors shrink-0"
-            title="Copy invite link"
-          >
-            {copied ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-          </button>
         </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          {invite.departmentName ? `Department: ${invite.departmentName} · ` : ""}
+          Expires {new Date(invite.expiresAt).toLocaleDateString()}
+        </p>
       </div>
 
-      {canManage && (
-        <button
-          onClick={onRevoke}
-          disabled={revokePending}
-          className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0 mt-0.5"
-          title="Revoke invitation"
+      <div className="flex items-center gap-2 shrink-0">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleCopy}
+          icon={<Copy className="w-3.5 h-3.5" />}
         >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      )}
+          Copy Link
+        </Button>
+
+        {canManage && (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={onRevoke}
+            loading={revokePending}
+            icon={<Trash2 className="w-3.5 h-3.5" />}
+          >
+            Revoke
+          </Button>
+        )}
+      </div>
     </li>
   );
 }
 
-// ─── Invite form ──────────────────────────────────────────────────────────────
+// ─── Progressive Invite Form (§46) ─────────────────────────────────────────────
 
 function InviteForm({
   orgId,
@@ -526,194 +586,114 @@ function InviteForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<(typeof ALL_ROLES)[number]>("USER");
-  const [deptId, setDeptId] = useState("");
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [role, setRole] = useState("USER");
+  const [departmentId, setDepartmentId] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
+
     startTransition(async () => {
       const result = await sendInvitation({
         organizationId: orgId,
         email: email.trim(),
-        role,
-        departmentId: deptId || undefined,
+        role: role as "ADMIN" | "MANAGER" | "AUDITOR" | "USER",
+        departmentId: departmentId || undefined,
       });
 
       if (result.status === "success") {
-        const link = `${window.location.origin}/invite/${result.token}`;
-        setGeneratedLink(link);
+        toast.success(`Invitation created for ${email}`);
+        if (result.token) {
+          const inviteUrl = `${window.location.origin}/invite/${result.token}`;
+          copyWithToast(inviteUrl, "Invitation link");
+        }
         router.refresh();
+        onDone();
       } else if (result.status === "error") {
         toast.error(result.message);
+      } else {
+        toast.error("Authentication required to send invitations.");
       }
     });
   }
 
-  async function handleCopyLink() {
-    if (!generatedLink) return;
-    await navigator.clipboard.writeText(generatedLink);
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
-    toast.success("Invite link copied!");
-  }
-
-  // After link generated - show it
-  if (generatedLink) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2 rounded-xl bg-green-500/10 border border-green-500/20 p-4">
-          <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-green-300">
-              Invitation created
-            </p>
-            <p className="text-xs text-green-500/80 mt-0.5">
-              Share this link with {email}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5">
-          <span className="text-xs font-mono text-gray-300 truncate flex-1">
-            {generatedLink}
-          </span>
-          <button
-            onClick={handleCopyLink}
-            className="text-gray-500 hover:text-white transition-colors shrink-0"
-          >
-            {linkCopied ? (
-              <CheckCircle2 className="w-4 h-4 text-green-400" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-
-        <p className="text-xs text-gray-500 text-center">
-          Link expires in 7 days. Share it directly through your preferred channel.
-        </p>
-
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => { setGeneratedLink(null); setEmail(""); }}>
-            Invite another
-          </Button>
-          <Button variant="primary" onClick={onDone}>
-            Done
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Input
-        label="Email address"
-        type="email"
-        placeholder="colleague@company.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        autoFocus
-      />
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 block mb-1.5">
+          Recipient Email Address
+        </label>
+        <Input
+          type="email"
+          required
+          placeholder="colleague@organization.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoFocus
+        />
+      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-gray-300">Role</label>
-        <div className="grid grid-cols-4 gap-2">
+      <div>
+        <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 block mb-1.5">
+          Access Authority Role
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {ALL_ROLES.map((r) => (
             <button
-              key={r}
+              key={r.role}
               type="button"
-              onClick={() => setRole(r)}
+              onClick={() => setRole(r.role)}
               className={cn(
-                "px-2 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                role === r
-                  ? "bg-blue-500/15 border-blue-500/30 text-blue-300"
-                  : "border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-white"
+                "p-2.5 rounded-xl border text-left transition-all",
+                role === r.role
+                  ? "bg-blue-50 dark:bg-blue-600/15 border-blue-300 dark:border-blue-500/40 text-blue-950 dark:text-white shadow-xs"
+                  : "bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/[0.06] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.05] hover:text-slate-900 dark:hover:text-slate-200"
               )}
             >
-              {r}
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-xs font-semibold text-slate-900 dark:text-white">{r.label}</span>
+                {role === r.role && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{r.desc}</p>
             </button>
           ))}
         </div>
       </div>
 
       {departments.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-300">
-            Department (optional)
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 block mb-1.5">
+            Assigned Department (Optional)
           </label>
           <select
-            value={deptId}
-            onChange={(e) => setDeptId(e.target.value)}
-            className="w-full rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/60"
+            value={departmentId}
+            onChange={(e) => setDepartmentId(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-[#12131d] border border-slate-200 dark:border-white/[0.08] text-xs sm:text-sm text-slate-900 dark:text-white rounded-xl p-2.5 outline-none focus:border-blue-500/50"
           >
-            <option value="">- None -</option>
+            <option value="">— Unassigned Department —</option>
             {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
             ))}
           </select>
         </div>
       )}
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onDone}>
+      <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+        <Button type="button" variant="ghost" size="sm" onClick={onDone}>
           Cancel
         </Button>
         <Button
           type="submit"
           variant="primary"
+          size="sm"
           loading={isPending}
-          icon={<Send className="w-4 h-4" />}
-          disabled={!email.trim()}
+          icon={<Send className="w-3.5 h-3.5" />}
         >
-          Create invite link
+          Generate Invitation
         </Button>
       </div>
     </form>
-  );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-        active
-          ? "bg-white/[0.08] text-white"
-          : "text-gray-400 hover:text-white"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function EmptyState({
-  icon,
-  message,
-}: {
-  icon: React.ReactNode;
-  message: string;
-}) {
-  return (
-    <div className="flex flex-col items-center py-12 text-center gap-3">
-      {icon}
-      <p className="text-sm text-gray-400">{message}</p>
-    </div>
   );
 }

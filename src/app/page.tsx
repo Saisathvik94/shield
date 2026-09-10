@@ -1,59 +1,66 @@
 import { auth } from "@/lib/auth";
 import Link from "next/link";
 import {
-  ShieldIcon,
+  Shield,
   Fingerprint,
   Building2,
   Package,
   ScrollText,
   ArrowRight,
-  CheckCircle2,
-  Link2,
-  QrCode,
-  Lock,
-  Cpu,
-  FileCheck,
+  FileCheck2,
+  Key,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export default async function HomePage() {
   const session = await auth();
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-gray-100">
-      {/* ─── Nav ─────────────────────────────────────────────────────────── */}
-      <header className="border-b border-white/[0.06] sticky top-0 bg-[#0a0a0f]/90 backdrop-blur-md z-50">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-violet-600">
-              <ShieldIcon className="w-4 h-4 text-white" strokeWidth={1.5} />
+    <div className="min-h-screen bg-slate-50 dark:bg-[#090a10] text-slate-900 dark:text-slate-200 selection:bg-blue-600 selection:text-white transition-colors duration-150">
+      {/* ─── Navigation Bar ────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-white/[0.08] bg-white/80 dark:bg-[#090a10]/80 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 shadow-md shadow-blue-500/20 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-white" strokeWidth={2} />
             </div>
-            <span className="font-semibold text-white tracking-tight">SHIELD</span>
+            <span className="font-bold text-slate-900 dark:text-white text-base tracking-tight">SHIELD</span>
+            <span className="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium">
+              Enterprise Trust Platform
+            </span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-6 text-sm text-gray-400">
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
-            <a href="#stack" className="hover:text-white transition-colors">Tech Stack</a>
+          <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-600 dark:text-slate-400">
+            <a href="#features" className="hover:text-slate-900 dark:hover:text-white transition-colors">Capabilities</a>
+            <a href="#architecture" className="hover:text-slate-900 dark:hover:text-white transition-colors">Architecture</a>
+            <a href="#security" className="hover:text-slate-900 dark:hover:text-white transition-colors">Trust Model</a>
           </nav>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
+
             {session?.user ? (
               <Link
                 href="/dashboard"
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-medium hover:from-blue-500 hover:to-violet-500 transition-all shadow-lg shadow-blue-500/20"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-all shadow-md shadow-blue-500/20"
               >
-                Go to Dashboard <ArrowRight className="w-3.5 h-3.5" />
+                <span>Console</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
               <>
-                <Link href="/login" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Sign in
+                <Link
+                  href="/login"
+                  className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors font-medium"
+                >
+                  Sign In
                 </Link>
                 <Link
                   href="/login"
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-medium hover:from-blue-500 hover:to-violet-500 transition-all shadow-lg shadow-blue-500/20"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-all shadow-md shadow-blue-500/20"
                 >
-                  Get started
+                  <span>Connect Wallet</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </>
             )}
@@ -61,324 +68,231 @@ export default async function HomePage() {
         </div>
       </header>
 
-      {/* ─── Hero ────────────────────────────────────────────────────────── */}
-      <section className="max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300 text-xs font-medium mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          SIH 2026 · Problem Statement SIH26125 · BEL
-        </div>
+      {/* ─── Hero Section ──────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden pt-20 pb-24 px-6">
+        {/* Subtle background glow */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-blue-500/10 dark:bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-        <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight leading-tight mb-6">
-          Blockchain-Backed{" "}
-          <span className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-            Secure Identity
-          </span>
-          <br />
-          &amp; Asset Management
-        </h1>
+        <div className="max-w-4xl mx-auto text-center relative z-10 space-y-6">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-slate-200 dark:border-white/[0.10] bg-white dark:bg-white/[0.03] text-slate-700 dark:text-slate-300 text-xs font-medium shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
+            <span>Algorand TestNet &amp; IPFS Live Ecosystem</span>
+          </div>
 
-        <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-          SHIELD gives every user one cryptographic identity tied to their Algorand wallet.
-          Manage organizations, control access, register assets, and anchor every critical
-          action immutably on-chain.
-        </p>
+          {/* Heading as explicitly requested */}
+          <h1 className="text-4xl sm:text-6xl font-bold text-slate-900 dark:text-white tracking-tight leading-[1.15]">
+            Blockchain-Backed Secure Identity
+            <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 dark:from-blue-400 dark:via-sky-300 dark:to-indigo-300">
+              &amp; Asset Management
+            </span>
+          </h1>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/login"
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-medium hover:from-blue-500 hover:to-violet-500 transition-all shadow-lg shadow-blue-500/25 text-sm"
-          >
-            <ShieldIcon className="w-4 h-4" strokeWidth={1.5} />
-            Connect Wallet &amp; Start
-          </Link>
-          <a
-            href="#how-it-works"
-            className="flex items-center gap-2 px-6 py-3 rounded-xl border border-white/[0.10] text-gray-300 hover:text-white hover:bg-white/[0.05] transition-all text-sm"
-          >
-            See how it works <ArrowRight className="w-4 h-4" />
-          </a>
-        </div>
-
-        {/* Stat row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-20 pt-10 border-t border-white/[0.06]">
-          {[
-            { value: "Algorand", label: "Trust layer" },
-            { value: "IPFS", label: "File storage" },
-            { value: "16 tables", label: "PostgreSQL schema" },
-            { value: "No passwords", label: "Wallet-only auth" },
-          ].map((s) => (
-            <div key={s.label} className="text-center">
-              <p className="text-xl font-bold text-white">{s.value}</p>
-              <p className="text-xs text-gray-500 mt-1">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Features ────────────────────────────────────────────────────── */}
-      <section id="features" className="max-w-6xl mx-auto px-6 py-20">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl font-bold text-white mb-3">Everything in one platform</h2>
-          <p className="text-gray-400 max-w-xl mx-auto text-sm">
-            From cryptographic identity to physical asset verification - SHIELD handles the full lifecycle.
+          {/* Subheading as explicitly requested */}
+          <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            SHIELD gives every user one cryptographic identity tied to their Algorand wallet. Manage organizations, control access, register assets, and anchor every critical action immutably on-chain.
           </p>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {FEATURES.map((f) => (
-            <FeatureCard key={f.title} {...f} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── How it works ────────────────────────────────────────────────── */}
-      <section id="how-it-works" className="max-w-4xl mx-auto px-6 py-20">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl font-bold text-white mb-3">How SHIELD works</h2>
-          <p className="text-gray-400 text-sm">The complete flow from wallet to verified asset.</p>
-        </div>
-
-        <div className="flex flex-col gap-0">
-          {STEPS.map((step, i) => (
-            <div key={step.title} className="flex gap-5">
-              {/* Step indicator */}
-              <div className="flex flex-col items-center">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white text-sm font-bold shrink-0 z-10">
-                  {i + 1}
-                </div>
-                {i < STEPS.length - 1 && (
-                  <div className="w-px flex-1 bg-white/[0.06] my-1" />
-                )}
-              </div>
-
-              {/* Content */}
-              <div className={`pb-10 flex-1 min-w-0 ${i === STEPS.length - 1 ? "" : ""}`}>
-                <h3 className="text-white font-semibold text-base mb-1">{step.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{step.description}</p>
-                {step.tag && (
-                  <span className="inline-flex items-center mt-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono">
-                    {step.tag}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Tech Stack ──────────────────────────────────────────────────── */}
-      <section id="stack" className="max-w-6xl mx-auto px-6 py-20 border-t border-white/[0.06]">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl font-bold text-white mb-3">Built with modern infrastructure</h2>
-          <p className="text-gray-400 text-sm">Production-grade stack, zero compromise on security.</p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {STACK.map((s) => (
-            <div
-              key={s.name}
-              className="flex flex-col items-center gap-2 p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] transition-colors text-center"
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link
+              href="/login"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-all shadow-lg shadow-blue-500/25"
             >
-              <span className="text-2xl">{s.icon}</span>
-              <p className="text-xs font-semibold text-white">{s.name}</p>
-              <p className="text-[10px] text-gray-500">{s.role}</p>
+              <Shield className="w-4 h-4" />
+              <span>Launch SHIELD Console</span>
+            </Link>
+            <a
+              href="#architecture"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white dark:bg-white/[0.04] hover:bg-slate-100 dark:hover:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-sm font-medium transition-all shadow-xs"
+            >
+              <span>Explore Architecture</span>
+              <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
+
+          {/* Institutional Trust Metrics */}
+          <div className="pt-16 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-slate-200 dark:border-white/[0.08] max-w-3xl mx-auto">
+            <div className="p-3 text-center">
+              <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">100%</p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">Non-Custodial DID</p>
             </div>
-          ))}
+            <div className="p-3 text-center">
+              <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">&lt; 3.8s</p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">Algorand Finality</p>
+            </div>
+            <div className="p-3 text-center">
+              <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">SHA-256</p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">IPFS Tamper Proof</p>
+            </div>
+            <div className="p-3 text-center">
+              <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">Zero</p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">Stored Passwords</p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ─── CTA ─────────────────────────────────────────────────────────── */}
-      <section className="max-w-4xl mx-auto px-6 py-20 text-center">
-        <div className="rounded-2xl bg-gradient-to-br from-blue-600/10 to-violet-600/10 border border-blue-500/20 p-12">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 shadow-lg shadow-blue-500/25 mx-auto mb-5">
-            <ShieldIcon className="w-7 h-7 text-white" strokeWidth={1.5} />
-          </div>
-          <h2 className="text-3xl font-bold text-white mb-3">
-            Ready to secure your organization?
+      {/* ─── Capabilities Section ──────────────────────────────────────── */}
+      <section id="features" className="max-w-6xl mx-auto px-6 py-20">
+        <div className="text-center max-w-2xl mx-auto mb-14 space-y-2">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Institutional-Grade Capabilities
           </h2>
-          <p className="text-gray-400 mb-8 max-w-lg mx-auto text-sm">
-            Connect your Pera Wallet and create your SHIELD identity in under a minute. No passwords. No custody. Full control.
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Engineered for high-assurance enterprise defense, multi-department administration, and public verification.
           </p>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-medium hover:from-blue-500 hover:to-violet-500 transition-all shadow-lg shadow-blue-500/25"
-          >
-            <ShieldIcon className="w-4 h-4" strokeWidth={1.5} />
-            Connect Wallet &amp; Get Started
-          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <FeatureCard
+            icon={Fingerprint}
+            title="Decentralized DID & Wallet Auth"
+            description="Users authenticate cryptographically using Pera Wallet without passwords. Decentralized Identifiers (DID) bind digital credentials to sovereign keys."
+          />
+          <FeatureCard
+            icon={Package}
+            title="NFT-Backed Asset Passports"
+            description="Register physical or digital assets into Algorand Standard Assets (ASA). Maintain full provenance, classification levels, and custodian assignments."
+          />
+          <FeatureCard
+            icon={FileCheck2}
+            title="IPFS Document Integrity"
+            description="Attach sensitive specs, warranties, and certificates via decentralized IPFS pinning. Detect any byte-level tampering using SHA-256 checksums."
+          />
+          <FeatureCard
+            icon={Building2}
+            title="Multi-Tenant Organizations"
+            description="Manage deep organizational hierarchies across departments, sections, and teams with strict tenant isolation and department heads."
+          />
+          <FeatureCard
+            icon={Key}
+            title="Granular RBAC & Custody Transfers"
+            description="Multi-tier permissions (Owner, Admin, Manager, Member, Auditor) combined with dual-approval workflows for high-value asset transfers."
+          />
+          <FeatureCard
+            icon={ScrollText}
+            title="Immutable Algorand Audit Trail"
+            description="Every administrative update, transfer, and document upload anchors a transaction hash on Algorand for permanent compliance verification."
+          />
         </div>
       </section>
 
-      {/* ─── Footer ──────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/[0.06] py-8">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      {/* ─── Architecture Section ──────────────────────────────────────── */}
+      <section id="architecture" className="max-w-5xl mx-auto px-6 py-20 border-t border-slate-200 dark:border-white/[0.08]">
+        <div className="text-center max-w-2xl mx-auto mb-14 space-y-2">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+            How SHIELD Secures Operations
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            A frictionless workflow bridging cryptographic consensus with enterprise day-to-day management.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <StepItem
+            step="01"
+            title="Wallet Handshake"
+            description="Sign a cryptographic nonce via Pera Wallet to establish a secure session."
+          />
+          <StepItem
+            step="02"
+            title="Join Organization"
+            description="Accept invitation tokens into departmental workspaces with designated RBAC roles."
+          />
+          <StepItem
+            step="03"
+            title="Register & Pin Assets"
+            description="Tokenize assets into Algorand ASAs and attach SHA-256 verified IPFS files."
+          />
+          <StepItem
+            step="04"
+            title="Audit & Public Verify"
+            description="Scan QR verification passports or audit immutable on-chain transaction hashes."
+          />
+        </div>
+      </section>
+
+      {/* ─── Call to Action ────────────────────────────────────────────── */}
+      <section className="max-w-5xl mx-auto px-6 py-16">
+        <div className="rounded-3xl bg-white dark:bg-gradient-to-b dark:from-[#12131e] dark:to-[#0d0e15] border border-slate-200 dark:border-white/[0.08] p-8 sm:p-12 text-center space-y-6 relative overflow-hidden shadow-xl">
+          <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
+            <Shield className="w-6 h-6 text-white" />
+          </div>
+
+          <div className="space-y-2 max-w-xl mx-auto">
+            <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+              Ready to Upgrade Enterprise Trust?
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+              Experience passwordless wallet authentication, decentralized asset passports, and immutable audit logs today.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-all shadow-md shadow-blue-500/20"
+            >
+              <span>Get Started with SHIELD</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Footer ────────────────────────────────────────────────────── */}
+      <footer className="border-t border-slate-200 dark:border-white/[0.08] py-8 text-center text-xs text-slate-500">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center">
-              <ShieldIcon className="w-3 h-3 text-white" strokeWidth={1.5} />
-            </div>
-            <span className="text-sm text-gray-500">SHIELD - SIH26125</span>
+            <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="font-semibold text-slate-800 dark:text-slate-300">SHIELD</span>
+            <span>— Blockchain-Backed Identity &amp; Asset Trust</span>
           </div>
-          <div className="text-xs text-gray-600 text-center">
-            Bharat Electronics Limited (BEL) · Blockchain &amp; Cybersecurity · Smart India Hackathon 2026
-          </div>
-          <div className="flex items-center gap-4 text-xs text-gray-600">
-            <Link href="/verify/demo" className="hover:text-gray-400 transition-colors">Verify asset</Link>
-            <Link href="/login" className="hover:text-gray-400 transition-colors">Sign in</Link>
-          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-600">
+            Powered by Algorand Blockchain · IPFS Decentralized Storage · Next.js
+          </p>
         </div>
       </footer>
     </div>
   );
 }
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const FEATURES = [
-  {
-    icon: <Fingerprint className="w-5 h-5 text-violet-400" />,
-    title: "Cryptographic Identity",
-    description:
-      "One Pera Wallet = one global identity. Every user gets a Decentralized Identifier (DID) anchored on Algorand. No passwords, no custody.",
-    accent: "violet",
-  },
-  {
-    icon: <Building2 className="w-5 h-5 text-blue-400" />,
-    title: "Multi-Tenant Organizations",
-    description:
-      "Create or join multiple organizations, each with its own departments, sections, teams, members, and roles. Full hierarchy support.",
-    accent: "blue",
-  },
-  {
-    icon: <Lock className="w-5 h-5 text-amber-400" />,
-    title: "Scoped Access Control",
-    description:
-      "OWNER → ADMIN → MANAGER → AUDITOR → USER. Roles are scoped per organization and per department - not just globally.",
-    accent: "amber",
-  },
-  {
-    icon: <Package className="w-5 h-5 text-emerald-400" />,
-    title: "Digital Asset Passport",
-    description:
-      "Register digital and physical assets with classification levels (PUBLIC → CRITICAL), owner, custodian, location, and physical identifier.",
-    accent: "emerald",
-  },
-  {
-    icon: <Link2 className="w-5 h-5 text-cyan-400" />,
-    title: "Algorand Tokenisation",
-    description:
-      "Every asset can be tokenised as an Algorand Standard Asset (ASA). Transfers are enforced via clawback - SHIELD maintains control.",
-    accent: "cyan",
-  },
-  {
-    icon: <FileCheck className="w-5 h-5 text-blue-400" />,
-    title: "IPFS Document Storage",
-    description:
-      "Attach files to any asset. SHA-256 hash computed automatically. Re-upload any file later to verify it hasn't been tampered with.",
-    accent: "blue",
-  },
-  {
-    icon: <ScrollText className="w-5 h-5 text-indigo-400" />,
-    title: "Immutable Audit Trail",
-    description:
-      "21 event types tracked. Any critical event can be anchored on Algorand with a SHA-256 proof. One-click anchor from the audit page.",
-    accent: "indigo",
-  },
-  {
-    icon: <QrCode className="w-5 h-5 text-emerald-400" />,
-    title: "Public QR Verification",
-    description:
-      "Scan the QR code on a physical asset → opens a public verification page that checks ownership live against the Algorand Indexer.",
-    accent: "emerald",
-  },
-  {
-    icon: <Cpu className="w-5 h-5 text-violet-400" />,
-    title: "Multi-Step Transfer Flow",
-    description:
-      "Request → Manager approves → ASA clawback transfer on-chain. Full request/approve/reject workflow with on-chain proof at every step.",
-    accent: "violet",
-  },
-];
-
-const STEPS = [
-  {
-    title: "Connect your Pera Wallet",
-    description:
-      "Open SHIELD and connect your Algorand Pera Wallet. If you're new, enter your name and email - your global identity is created in seconds.",
-    tag: "Algorand wallet signature verified",
-  },
-  {
-    title: "Create or join an organization",
-    description:
-      "Create your own organization (you become OWNER) or accept an invite link from an admin to join an existing one with a specific role.",
-    tag: "ORG_CREATED anchored on Algorand",
-  },
-  {
-    title: "Build your structure",
-    description:
-      "Add departments, sections, and teams. Assign department and section heads. Invite members with targeted role + placement.",
-    tag: null,
-  },
-  {
-    title: "Register and classify assets",
-    description:
-      "Register any digital or physical asset with a human ID like RADAR-001. Choose classification: PUBLIC, INTERNAL, CONFIDENTIAL, SECRET, or CRITICAL.",
-    tag: "CRITICAL assets auto-anchored on Algorand",
-  },
-  {
-    title: "Tokenise on Algorand",
-    description:
-      "One click tokenises the asset as an Algorand Standard Asset (ASA) - 1 non-fungible unit, treasury holds clawback for compliance.",
-    tag: "ASA created on Algorand TestNet",
-  },
-  {
-    title: "Attach documents via IPFS",
-    description:
-      "Drag and drop any file onto the asset passport. It's pinned to IPFS via Pinata. SHA-256 stored for tamper detection.",
-    tag: "IPFS CID + SHA-256 stored",
-  },
-  {
-    title: "Transfer with approval",
-    description:
-      "Request a transfer to any org member. A manager or admin approves or rejects. On approval, the ASA is clawback-transferred on-chain.",
-    tag: "On-chain clawback transfer",
-  },
-  {
-    title: "Verify with QR code",
-    description:
-      "Scan the QR code on the physical asset. The public page checks the SHIELD registry, blockchain proofs, and live Algorand Indexer simultaneously.",
-    tag: "5-check live verification",
-  },
-];
-
-const STACK = [
-  { name: "Next.js 16", role: "App framework", icon: "▲" },
-  { name: "Algorand", role: "Trust layer", icon: "⬡" },
-  { name: "IPFS / Pinata", role: "File storage", icon: "📌" },
-  { name: "Neon DB", role: "PostgreSQL", icon: "🐘" },
-  { name: "Drizzle ORM", role: "Database ORM", icon: "🗃️" },
-  { name: "Pera Wallet", role: "Identity", icon: "🔐" },
-];
-
-// ─── Feature card ─────────────────────────────────────────────────────────────
+// ─── Sub-Components ───────────────────────────────────────────────────────────
 
 function FeatureCard({
-  icon,
+  icon: Icon,
   title,
   description,
 }: {
-  icon: React.ReactNode;
+  icon: React.ElementType;
   title: string;
   description: string;
-  accent: string;
 }) {
   return (
-    <div className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all">
-      <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center mb-4">
-        {icon}
+    <div className="p-6 rounded-2xl bg-white dark:bg-[#0f1017] border border-slate-200/80 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/[0.12] transition-all space-y-3 shadow-xs">
+      <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 flex items-center justify-center">
+        <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
       </div>
-      <h3 className="text-sm font-semibold text-white mb-2">{title}</h3>
-      <p className="text-xs text-gray-400 leading-relaxed">{description}</p>
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-white tracking-tight">{title}</h3>
+      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+function StepItem({
+  step,
+  title,
+  description,
+}: {
+  step: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="p-5 rounded-2xl bg-white dark:bg-[#0f1017] border border-slate-200/80 dark:border-white/[0.06] space-y-2 shadow-xs">
+      <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">{step}</span>
+      <h3 className="text-xs font-semibold text-slate-900 dark:text-white">{title}</h3>
+      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">{description}</p>
     </div>
   );
 }
