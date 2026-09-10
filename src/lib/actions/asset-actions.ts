@@ -281,7 +281,7 @@ export async function grantAssetAccess(
   });
   if (!wallet) return { status: "error", message: "Selected member has no linked wallet." };
 
-  // Attempt on-chain grant (non-fatal — DB record is the source of truth)
+  // Attempt on-chain grant (non-fatal - DB record is the source of truth)
   if (isAlgorandConfigured()) {
     setOnChainAssetAccess({
       assetDbId,

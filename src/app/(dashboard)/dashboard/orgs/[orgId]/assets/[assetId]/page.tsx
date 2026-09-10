@@ -43,9 +43,9 @@ export default async function AssetDetailPage({ params }: Props) {
 
   const [ipfsObjects, blockchainRecords, auditEvents, orgMembers, docVersions, pendingApproval, userWallet] =
     await Promise.all([
-      getAssetIpfsObjects(assetId),
-      getAssetBlockchainRecords(assetId),
-      getAssetAuditEvents(assetId, 20),
+      getAssetIpfsObjects(asset.id),
+      getAssetBlockchainRecords(asset.id),
+      getAssetAuditEvents(asset.id, 20),
       getOrganizationMembers(orgId),
       db.query.documentVersions.findMany({
         where: eq(documentVersions.assetId, asset.id),

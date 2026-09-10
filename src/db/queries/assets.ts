@@ -2,19 +2,38 @@ import { eq, and, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { assets, organizationMemberships, auditEvents } from "@/db/schema";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Full asset detail including related entities */
 export async function getAssetById(assetDbId: string, userId: string) {
-  const asset = await db.query.assets.findFirst({
-    where: eq(assets.id, assetDbId),
-    with: {
-      owner: true,
-      custodian: true,
-      department: true,
-      section: true,
-      organization: true,
-      access: true,
-    },
-  });
+  const isUuid = UUID_REGEX.test(assetDbId);
+  let asset = isUuid
+    ? await db.query.assets.findFirst({
+        where: eq(assets.id, assetDbId),
+        with: {
+          owner: true,
+          custodian: true,
+          department: true,
+          section: true,
+          organization: true,
+          access: true,
+        },
+      })
+    : null;
+
+  if (!asset) {
+    asset = await db.query.assets.findFirst({
+      where: eq(assets.assetId, assetDbId),
+      with: {
+        owner: true,
+        custodian: true,
+        department: true,
+        section: true,
+        organization: true,
+        access: true,
+      },
+    });
+  }
   if (!asset) return null;
 
   // Must be an active member of the org

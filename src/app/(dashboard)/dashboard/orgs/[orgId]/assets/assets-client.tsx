@@ -276,7 +276,7 @@ export function AssetsClient({
                       onChange={(e) => handleChange("departmentId", e.target.value)}
                       className="w-full bg-slate-50 dark:bg-[#12131d] border border-slate-200 dark:border-white/[0.08] text-xs sm:text-sm text-slate-900 dark:text-white rounded-xl p-2.5 outline-none focus:border-blue-500/50"
                     >
-                      <option value="">— Organization General —</option>
+                      <option value="">- Organization General -</option>
                       {departments.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name}

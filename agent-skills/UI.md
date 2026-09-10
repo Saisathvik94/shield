@@ -4,7 +4,7 @@ name: shield-ui-ux
 description: Design and implement SHIELD's enterprise security UI with simple navigation, trustworthy visual language, accessible interactions, purposeful microinteractions, motion, loading states, feedback patterns, and human-first AI experiences. Use when building, redesigning, or polishing SHIELD pages, dashboards, identity, assets, access control, approvals, audit, verification, or admin interfaces.
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# SHIELD — UI/UX Design & Interaction Skill
+# SHIELD - UI/UX Design & Interaction Skill
 
 ## 1. Role
 
@@ -596,7 +596,7 @@ Policy Check
 
 
 Approval Required
-Yes — Manager
+Yes - Manager
 
 [Cancel] [Submit Request]
 ```

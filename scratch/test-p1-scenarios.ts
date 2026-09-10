@@ -44,7 +44,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
 
 async function runP1Tests() {
   console.log("\n============================================================");
-  console.log("  SHIELD — P1 AUTOMATED VERIFICATION & SECURITY TEST SUITE  ");
+  console.log("  SHIELD - P1 AUTOMATED VERIFICATION & SECURITY TEST SUITE  ");
   console.log("  Cryptographic Quorum + Deterministic Risk & Trust Engine  ");
   console.log("============================================================\n");
 

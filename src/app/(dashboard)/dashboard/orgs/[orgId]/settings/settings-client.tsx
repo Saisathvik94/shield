@@ -414,7 +414,7 @@ function DeptItem({
                 disabled={headPending}
                 className="flex-1 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.10] rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500/50"
               >
-                <option value="">— Unassigned —</option>
+                <option value="">- Unassigned -</option>
                 {allMembers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}

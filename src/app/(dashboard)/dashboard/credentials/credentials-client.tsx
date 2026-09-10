@@ -971,8 +971,8 @@ export function CredentialsClient({
                     )}
                     <span>
                       {verificationResult.valid
-                        ? "VERIFIED — IMMUTABLE CRYPTOGRAPHIC PROOF CONFIRMED"
-                        : `FAILED — STATUS: ${verificationResult.status}`}
+                        ? "VERIFIED - IMMUTABLE CRYPTOGRAPHIC PROOF CONFIRMED"
+                        : `FAILED - STATUS: ${verificationResult.status}`}
                     </span>
                   </div>
                 </div>

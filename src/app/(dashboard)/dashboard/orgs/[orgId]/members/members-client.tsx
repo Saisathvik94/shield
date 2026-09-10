@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CopyButton } from "@/components/dashboard/copy-button";
-import { roleColor, relativeTime, shortAddress, cn, copyWithToast } from "@/lib/utils";
+import { roleColor, relativeTime, shortAddress, cn, copyWithToast, getAppBaseUrl } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -522,10 +522,7 @@ function InviteRow({
   onRevoke: () => void;
   revokePending: boolean;
 }) {
-  const inviteUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/invite/${invite.token}`
-      : `/invite/${invite.token}`;
+  const inviteUrl = `${getAppBaseUrl()}/invite/${invite.token}`;
 
   function handleCopy() {
     copyWithToast(inviteUrl, "Invitation URL");
@@ -604,7 +601,7 @@ function InviteForm({
       if (result.status === "success") {
         toast.success(`Invitation created for ${email}`);
         if (result.token) {
-          const inviteUrl = `${window.location.origin}/invite/${result.token}`;
+          const inviteUrl = `${getAppBaseUrl()}/invite/${result.token}`;
           copyWithToast(inviteUrl, "Invitation link");
         }
         router.refresh();
@@ -670,7 +667,7 @@ function InviteForm({
             onChange={(e) => setDepartmentId(e.target.value)}
             className="w-full bg-slate-50 dark:bg-[#12131d] border border-slate-200 dark:border-white/[0.08] text-xs sm:text-sm text-slate-900 dark:text-white rounded-xl p-2.5 outline-none focus:border-blue-500/50"
           >
-            <option value="">— Unassigned Department —</option>
+            <option value="">- Unassigned Department -</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}

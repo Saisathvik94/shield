@@ -12,6 +12,20 @@ export function shortAddress(address: string, chars = 6): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
+/** Get the canonical production/public domain URL */
+export function getAppBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+  return "https://shield-mocha-eight.vercel.app";
+}
+
+/** Get the canonical public verification URL for an asset */
+export function getVerificationUrl(assetId: string): string {
+  const base = getAppBaseUrl();
+  return `${base}/verify/${encodeURIComponent(assetId)}`;
+}
+
 /** Generate a random nonce string for wallet challenge */
 export function generateNonce(length = 32): string {
   const chars =

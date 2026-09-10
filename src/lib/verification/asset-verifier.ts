@@ -65,14 +65,17 @@ export async function verifyAssetFull7Point(
   const verifiedAt = new Date().toISOString();
 
   // 1. Registry Verification
-  let assetRecord = await db.query.assets.findFirst({
-    where: eq(assets.id, assetIdOrDbId),
-    with: {
-      organization: true,
-      owner: true,
-      custodian: true,
-    },
-  });
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assetIdOrDbId);
+  let assetRecord = isUuid
+    ? await db.query.assets.findFirst({
+        where: eq(assets.id, assetIdOrDbId),
+        with: {
+          organization: true,
+          owner: true,
+          custodian: true,
+        },
+      })
+    : null;
 
   if (!assetRecord) {
     assetRecord = await db.query.assets.findFirst({

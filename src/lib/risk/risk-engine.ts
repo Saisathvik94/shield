@@ -42,9 +42,14 @@ export async function evaluateAssetRisk(
   const approvalReasons: string[] = [];
 
   // 1. Fetch Asset
-  const asset = await db.query.assets.findFirst({
-    where: and(eq(assets.id, assetId), eq(assets.organizationId, organizationId)),
-  });
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assetId);
+  const asset = isUuid
+    ? await db.query.assets.findFirst({
+        where: and(eq(assets.id, assetId), eq(assets.organizationId, organizationId)),
+      })
+    : await db.query.assets.findFirst({
+        where: and(eq(assets.assetId, assetId), eq(assets.organizationId, organizationId)),
+      });
 
   if (!asset) {
     throw new Error(`Asset ${assetId} not found in organization ${organizationId}`);

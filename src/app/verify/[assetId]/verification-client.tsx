@@ -27,7 +27,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { classificationColor, copyWithToast, cn } from "@/lib/utils";
+import { classificationColor, copyWithToast, cn, getVerificationUrl } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { AdvancedAssetVerificationResult, VerificationCheckPoint } from "@/lib/verification/asset-verifier";
 
@@ -49,13 +49,11 @@ export function VerificationClient({
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const url = window.location.href;
-      QRCode.toDataURL(url, { width: 280, margin: 2 })
-        .then(setQrDataUrl)
-        .catch(console.error);
-    }
-  }, []);
+    const url = getVerificationUrl(assetSummary?.assetId || assetId);
+    QRCode.toDataURL(url, { width: 280, margin: 2 })
+      .then(setQrDataUrl)
+      .catch(console.error);
+  }, [assetId, assetSummary?.assetId]);
 
   const handleCopy = (text: string, id: string) => {
     copyWithToast(text, "Verification Data");
@@ -416,6 +414,22 @@ export function VerificationClient({
                 <img src={qrDataUrl} alt="Asset Verification QR Code" className="w-48 h-48 mx-auto" />
               </div>
             )}
+
+            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-left">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Public Verification URL</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-mono text-blue-600 dark:text-blue-400 truncate">
+                  {getVerificationUrl(assetSummary?.assetId || assetId)}
+                </p>
+                <button
+                  onClick={() => copyWithToast(getVerificationUrl(assetSummary?.assetId || assetId), "Verification URL")}
+                  className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-white/[0.1] text-slate-600 dark:text-slate-300 shrink-0"
+                  title="Copy link"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
 
             <div className="pt-2">
               <a
