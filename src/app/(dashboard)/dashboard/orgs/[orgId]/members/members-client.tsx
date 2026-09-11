@@ -24,6 +24,8 @@ import {
   AlertCircle,
   Sparkles,
   KeyRound,
+  Crown,
+  Shield,
 } from "lucide-react";
 import { sendInvitation } from "@/lib/actions/invite-actions";
 import {
@@ -122,6 +124,7 @@ export function MembersClient({
   });
 
   const unboundWalletsCount = members.filter((m) => !m.user.wallet).length;
+  const ownerMembers = members.filter((m) => m.role === "OWNER");
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6 animate-in fade-in-0 duration-150">
@@ -135,7 +138,7 @@ export function MembersClient({
             <Badge variant="neutral" className="text-xs">
               {members.length} Total Members
             </Badge>
-            {unboundWalletsCount > 0 && (
+            {canManage && unboundWalletsCount > 0 && (
               <span className="hidden sm:inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 font-medium">
                 <KeyRound className="w-3 h-3" />
                 {unboundWalletsCount} Pending Wallet Binding
@@ -143,7 +146,7 @@ export function MembersClient({
             )}
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            Manage organizational departments, bulk-onboard personnel via CSV, and inspect sovereign DID wallet bindings for <strong className="text-slate-900 dark:text-slate-200">{orgName}</strong>.
+            Manage organizational departments, roles, and access hierarchy for <strong className="text-slate-900 dark:text-slate-200">{orgName}</strong>.
           </p>
         </div>
 
@@ -240,17 +243,61 @@ export function MembersClient({
       {/* TAB 1: Department Hierarchy View */}
       {tab === "hierarchy" && (
         <div className="space-y-6">
-          {/* Info Banner on Non-Custodial Onboarding & Bulk Provisioning */}
-          <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-500/20 text-slate-700 dark:text-slate-300 flex items-start gap-3 text-xs leading-relaxed">
-            <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-            <div>
-              <span className="font-semibold text-blue-950 dark:text-blue-200 block mb-0.5">
-                Bulk Employee Provisioning &amp; Auto-Binding
-              </span>
-              Admins can upload employee names &amp; emails directly to any department via CSV. Pre-provisioned members start with <span className="font-medium text-amber-600 dark:text-amber-400">Wallet Binding Pending</span>. When the employee connects their wallet at signup with their email, SHIELD will bind their wallet to this account automatically, skipping manual invite tokens.
+          {/* Info Banner on Non-Custodial Onboarding (Shown to Admins Only) */}
+          {canManage && (
+            <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-500/20 text-slate-700 dark:text-slate-300 flex items-start gap-3 text-xs leading-relaxed">
+              <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+              <div>
+                <span className="font-semibold text-blue-950 dark:text-blue-200 block mb-0.5">
+                  Bulk Employee Provisioning &amp; Auto-Binding
+                </span>
+                Admins can upload employee names &amp; emails directly to any department via CSV. Pre-provisioned members start with <span className="font-medium text-amber-600 dark:text-amber-400">Wallet Binding Pending</span>. When the employee connects their wallet at signup with their email, SHIELD will bind their wallet to this account automatically, skipping manual invite tokens.
+              </div>
             </div>
-          </div>
+          )}
 
+          {/* 1. Top Section: Organization Leadership & Head */}
+          {ownerMembers.length > 0 && (
+            <Card className="border-amber-200/80 dark:border-amber-500/30 bg-gradient-to-r from-amber-50/30 via-transparent to-transparent dark:from-amber-950/10 shadow-xs">
+              <CardHeader className="bg-amber-50/50 dark:bg-amber-500/[0.04] border-b border-amber-100 dark:border-amber-500/20 py-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 border border-amber-300 dark:border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-300 shrink-0">
+                      <Crown className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        Organization Head &amp; Executive Leadership
+                        <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">
+                          Root of Trust
+                        </span>
+                      </CardTitle>
+                      <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+                        Primary administrative authority and global governance root for {orgName}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ul className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                  {ownerMembers.map((m) => (
+                    <MemberRow
+                      key={m.id}
+                      member={m}
+                      orgId={orgId}
+                      canManage={canManage}
+                      currentUserId={currentUserId}
+                      currentUserRole={currentUserRole}
+                      isOrganizationHead={true}
+                    />
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 2. Department Cards */}
           {departments.length === 0 ? (
             <Card>
               <CardContent className="p-8">
@@ -266,8 +313,9 @@ export function MembersClient({
               {departments.map((dept) => {
                 const deptMembers = members.filter(
                   (m) =>
-                    m.departmentId === dept.id ||
-                    m.department?.toLowerCase() === dept.name.toLowerCase()
+                    m.role !== "OWNER" &&
+                    (m.departmentId === dept.id ||
+                      m.department?.toLowerCase() === dept.name.toLowerCase())
                 );
                 return (
                   <DepartmentCard
@@ -283,16 +331,17 @@ export function MembersClient({
                 );
               })}
 
-              {/* Unassigned / Organization-wide Members */}
+              {/* 3. General Personnel / Unassigned Staff (Non-Owners only) */}
               {(() => {
-                const unassignedMembers = members.filter(
+                const unassignedStaff = members.filter(
                   (m) =>
+                    m.role !== "OWNER" &&
                     !m.departmentId &&
                     !departments.some(
                       (d) => d.name.toLowerCase() === m.department?.toLowerCase()
                     )
                 );
-                if (unassignedMembers.length === 0) return null;
+                if (unassignedStaff.length === 0) return null;
                 return (
                   <Card className="border-dashed border-slate-300 dark:border-white/[0.1]">
                     <CardHeader className="pb-3 border-b border-slate-100 dark:border-white/[0.04]">
@@ -300,7 +349,7 @@ export function MembersClient({
                         <div>
                           <CardTitle className="text-sm font-semibold flex items-center gap-2">
                             <Users className="w-4 h-4 text-slate-400" />
-                            Unassigned / General Personnel ({unassignedMembers.length})
+                            General Personnel / Unassigned to Department ({unassignedStaff.length})
                           </CardTitle>
                           <CardDescription className="text-xs mt-0.5">
                             Members with organization-wide access not bound to a specific department
@@ -310,7 +359,7 @@ export function MembersClient({
                     </CardHeader>
                     <CardContent className="p-0">
                       <ul className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                        {unassignedMembers.map((m) => (
+                        {unassignedStaff.map((m) => (
                           <MemberRow
                             key={m.id}
                             member={m}
@@ -379,6 +428,7 @@ export function MembersClient({
                       canManage={canManage}
                       currentUserId={currentUserId}
                       currentUserRole={currentUserRole}
+                      isOrganizationHead={m.role === "OWNER"}
                     />
                   ))}
                 </ul>
@@ -446,7 +496,7 @@ function DepartmentCard({
                 <Badge variant="neutral" className="text-xs">
                   {members.length} {members.length === 1 ? "Member" : "Members"}
                 </Badge>
-                {pendingWallets > 0 && (
+                {canManage && pendingWallets > 0 && (
                   <Badge variant="warning" className="text-[10px] hidden md:inline-flex">
                     {pendingWallets} Unbound
                   </Badge>
@@ -525,12 +575,14 @@ function MemberRow({
   canManage,
   currentUserId,
   currentUserRole,
+  isOrganizationHead = false,
 }: {
   member: Member;
   orgId: string;
   canManage: boolean;
   currentUserId: string;
   currentUserRole: string;
+  isOrganizationHead?: boolean;
 }) {
   const router = useRouter();
   const [rolePending, startRoleTransition] = useTransition();
@@ -589,8 +641,19 @@ function MemberRow({
   return (
     <li className="flex items-center gap-4 px-5 py-3.5 relative hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
       {/* Avatar */}
-      <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-white/[0.08] flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-200 shrink-0">
-        {member.user.name?.slice(0, 1)?.toUpperCase() ?? "?"}
+      <div
+        className={cn(
+          "w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-bold shrink-0",
+          isOrganizationHead
+            ? "bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-200"
+            : "bg-blue-50 dark:bg-blue-600/20 border-blue-200 dark:border-white/[0.08] text-blue-700 dark:text-blue-200"
+        )}
+      >
+        {isOrganizationHead ? (
+          <Crown className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+        ) : (
+          member.user.name?.slice(0, 1)?.toUpperCase() ?? "?"
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
@@ -598,6 +661,11 @@ function MemberRow({
           <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
             {member.user.name}
           </p>
+          {isOrganizationHead && (
+            <span className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/20 border border-amber-300 dark:border-amber-500/30 px-2 py-0.2 rounded font-semibold">
+              Organization Head
+            </span>
+          )}
           {isSelf && (
             <span className="text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-1.5 py-0.2 rounded font-medium">
               You
@@ -606,7 +674,7 @@ function MemberRow({
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{member.user.email}</p>
 
-        {/* Wallet status: Bound vs Wallet Binding Pending */}
+        {/* Wallet status: Bound vs Pending (Pending note shown to Admin only) */}
         <div className="mt-1 flex items-center gap-2">
           {isWalletBound ? (
             <div className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 font-mono">
@@ -614,7 +682,7 @@ function MemberRow({
               <span className="truncate">{shortAddress(member.user.wallet!, 5)}</span>
               <CopyButton text={member.user.wallet!} label="Wallet Address" />
             </div>
-          ) : (
+          ) : canManage ? (
             <span
               className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20"
               title="Pre-provisioned sovereign DID. Algorand wallet address will bind upon employee's initial login."
@@ -622,7 +690,7 @@ function MemberRow({
               <Clock className="w-2.5 h-2.5 shrink-0" />
               Wallet Binding Pending
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -630,13 +698,18 @@ function MemberRow({
         <span className={cn("text-[11px] px-2.5 py-0.5 rounded-full font-semibold border", roleColor(member.role))}>
           {member.role}
         </span>
-        {member.department && (
+        {isOrganizationHead ? (
+          <span className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1 font-medium">
+            <Shield className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            Executive Office
+          </span>
+        ) : member.department ? (
           <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
             <Building2 className="w-3 h-3 text-slate-400 dark:text-slate-500" />
             {member.department}
             {member.section ? ` · ${member.section}` : ""}
           </span>
-        )}
+        ) : null}
         {member.joinedAt && (
           <span className="text-[10px] text-slate-400 dark:text-slate-500">
             Joined {relativeTime(member.joinedAt)}
