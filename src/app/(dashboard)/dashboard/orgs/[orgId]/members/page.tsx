@@ -40,29 +40,35 @@ export default async function MembersPage({ params }: Props) {
       currentUserId={session.user.id}
       currentUserRole={membership.role}
       canManage={canManage}
-      members={members.map((m) => ({
-        id: m.id,
-        userId: m.userId,
-        role: m.role,
-        status: m.status,
-        joinedAt: m.joinedAt?.toISOString() ?? null,
-        user: {
-          id: m.user.id,
-          name: m.user.name,
-          email: m.user.email,
-          wallet: m.user.walletIdentities?.[0]?.walletAddress ?? null,
-        },
-        department:
-          (
-            m.assignments?.[0] as
-              | { department?: { name: string } }
-              | undefined
-          )?.department?.name ?? null,
-        section: null,
-      }))}
+      members={members.map((m) => {
+        const assignment = m.assignments?.[0] as
+          | {
+              departmentId?: string;
+              department?: { id: string; name: string };
+              section?: { id: string; name: string };
+            }
+          | undefined;
+        return {
+          id: m.id,
+          userId: m.userId,
+          role: m.role,
+          status: m.status,
+          joinedAt: m.joinedAt?.toISOString() ?? null,
+          user: {
+            id: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            wallet: m.user.walletIdentities?.[0]?.walletAddress ?? null,
+          },
+          departmentId: assignment?.departmentId ?? assignment?.department?.id ?? null,
+          department: assignment?.department?.name ?? null,
+          section: assignment?.section?.name ?? null,
+        };
+      })}
       departments={departments.map((d) => ({
         id: d.id,
         name: d.name,
+        description: d.description ?? null,
       }))}
       pendingInvites={pendingInvites.map((inv) => {
         const typed = inv as typeof inv & {
