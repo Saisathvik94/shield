@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useId } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -22,10 +22,6 @@ import {
   Upload,
   FileSpreadsheet,
   AlertCircle,
-  HelpCircle,
-  ShieldAlert,
-  Download,
-  Layers,
   Sparkles,
   KeyRound,
 } from "lucide-react";
@@ -249,9 +245,9 @@ export function MembersClient({
             <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
             <div>
               <span className="font-semibold text-blue-950 dark:text-blue-200 block mb-0.5">
-                Enterprise Non-Custodial Provisioning &amp; Wallet Binding
+                Bulk Employee Provisioning &amp; Auto-Binding
               </span>
-              Admins can pre-provision thousands of department employees via CSV with assigned roles and verifiable security clearance credentials. Newly onboarded employees start with <span className="font-medium text-amber-600 dark:text-amber-400">Wallet Binding Pending</span>. Their sovereign Algorand wallet address automatically binds to their W3C DID upon their first authentication.
+              Admins can upload employee names &amp; emails directly to any department via CSV. Pre-provisioned members start with <span className="font-medium text-amber-600 dark:text-amber-400">Wallet Binding Pending</span>. When the employee connects their wallet at signup with their email, SHIELD will bind their wallet to this account automatically, skipping manual invite tokens.
             </div>
           </div>
 
@@ -725,11 +721,11 @@ function BulkUploadModal({
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [mode, setMode] = useState<"paste" | "upload">("paste");
 
-  const sampleCsv = `name,email,role,clearance_level,designation,employee_id
-Alice Johnson,alice@corp.com,MANAGER,CONFIDENTIAL,Lead Engineer,ENG-101
-Bob Smith,bob@corp.com,USER,INTERNAL,DevOps Engineer,ENG-102
-Carol Davis,carol@corp.com,AUDITOR,SECRET,Security Analyst,SEC-204
-David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
+  const sampleCsv = `name,email
+Alice Johnson,alice@corp.com
+Bob Smith,bob@corp.com
+Carol Davis,carol@corp.com
+David Zhang,david@corp.com`;
 
   function parseCsvContent(text: string) {
     const lines = text.trim().split("\n");
@@ -744,14 +740,6 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
       .map((h) => h.trim().toLowerCase().replace(/["']/g, ""));
     const emailIdx = headers.indexOf("email");
     const nameIdx = headers.indexOf("name");
-    const roleIdx = headers.indexOf("role");
-    const clearanceIdx = headers.indexOf("clearance_level") !== -1 
-      ? headers.indexOf("clearance_level") 
-      : headers.indexOf("clearance");
-    const designationIdx = headers.indexOf("designation");
-    const empIdIdx = headers.indexOf("employee_id") !== -1 
-      ? headers.indexOf("employee_id") 
-      : headers.indexOf("empid");
 
     if (emailIdx === -1) {
       setParseErrors(["CSV header must contain an 'email' column."]);
@@ -769,18 +757,6 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
       const cols = line.split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
       const email = cols[emailIdx]?.toLowerCase();
       const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx] : email?.split("@")[0] || "Member";
-      const rawRole = roleIdx !== -1 && cols[roleIdx] ? cols[roleIdx].toUpperCase() : "USER";
-      const validRoles = ["OWNER", "ADMIN", "MANAGER", "AUDITOR", "USER"];
-      const role = validRoles.includes(rawRole) ? (rawRole as BulkMemberRow["role"]) : "USER";
-
-      const rawClearance = clearanceIdx !== -1 && cols[clearanceIdx] ? cols[clearanceIdx].toUpperCase() : undefined;
-      const validClearances = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "SECRET", "TOP_SECRET"];
-      const clearanceLevel = validClearances.includes(rawClearance || "")
-        ? (rawClearance as BulkMemberRow["clearanceLevel"])
-        : undefined;
-
-      const designation = designationIdx !== -1 ? cols[designationIdx] : undefined;
-      const employeeId = empIdIdx !== -1 ? cols[empIdIdx] : undefined;
 
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         errors.push(`Row ${i}: Invalid or missing email "${cols[emailIdx]}"`);
@@ -790,10 +766,6 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
       rows.push({
         name,
         email,
-        role,
-        clearanceLevel,
-        designation,
-        employeeId,
       });
     }
 
@@ -863,7 +835,7 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
                 Bulk Onboard to {department.name}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Pre-provision identities, roles, and cryptographic clearances via CSV
+                Pre-create employee accounts with pending wallet binding
               </p>
             </div>
           </div>
@@ -883,9 +855,9 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
             <KeyRound className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
             <div>
               <strong className="text-slate-900 dark:text-slate-200 font-semibold">
-                Non-Custodial Enterprise Model:
+                Auto-Binding on Signup:
               </strong>{" "}
-              Members will be registered with <span className="font-mono text-amber-600 dark:text-amber-400 font-medium">Wallet Binding Pending</span>. When the employee connects with Pera Wallet or biometric passkey, their cryptographic DID public key will automatically bind without admin intervention.
+              Accounts are created with <span className="font-mono text-amber-600 dark:text-amber-400 font-medium">Wallet Binding Pending</span>. When the employee connects with their Pera Wallet and enters their email at signup, SHIELD binds their wallet to this account automatically, skipping manual invite tokens.
             </div>
           </div>
 
@@ -933,10 +905,10 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
           {mode === "paste" ? (
             <div>
               <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                CSV Input (Headers: name, email, role, clearance_level, designation, employee_id)
+                CSV Input (Headers: name, email)
               </label>
               <textarea
-                rows={6}
+                rows={5}
                 value={csvText}
                 onChange={(e) => handleTextChange(e.target.value)}
                 placeholder={sampleCsv}
@@ -950,7 +922,7 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
                 Choose a CSV file to upload
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                Must include header row with at least &quot;email&quot; column
+                Must include header row with at least &quot;email&quot; and &quot;name&quot;
               </p>
               <label className="inline-flex">
                 <input
@@ -997,9 +969,8 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
                     <tr className="bg-slate-50 dark:bg-white/[0.03] text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/[0.06]">
                       <th className="p-2 font-medium">Name</th>
                       <th className="p-2 font-medium">Email</th>
-                      <th className="p-2 font-medium">Role</th>
-                      <th className="p-2 font-medium">Clearance</th>
-                      <th className="p-2 font-medium">Designation</th>
+                      <th className="p-2 font-medium">Department</th>
+                      <th className="p-2 font-medium">Wallet Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
@@ -1007,16 +978,14 @@ David Zhang,david@corp.com,USER,CONFIDENTIAL,Backend Developer,ENG-105`;
                       <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
                         <td className="p-2 font-medium text-slate-900 dark:text-white">{r.name}</td>
                         <td className="p-2 text-slate-600 dark:text-slate-400 font-mono">{r.email}</td>
-                        <td className="p-2">
-                          <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold border", roleColor(r.role || "USER"))}>
-                            {r.role || "USER"}
-                          </span>
-                        </td>
                         <td className="p-2 text-slate-600 dark:text-slate-300">
-                          {r.clearanceLevel || "—"}
+                          {department.name}
                         </td>
-                        <td className="p-2 text-slate-500 dark:text-slate-400">
-                          {r.designation || "—"}
+                        <td className="p-2">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20">
+                            <Clock className="w-2.5 h-2.5" />
+                            Pending Binding
+                          </span>
                         </td>
                       </tr>
                     ))}

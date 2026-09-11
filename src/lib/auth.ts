@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/db";
+import { eq } from "drizzle-orm";
 import {
   users,
   accounts,
@@ -90,18 +91,42 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!name || !email) return null;
 
-        const emailUser = await getUserByEmail(email);
+        const normalizedEmail = email.trim().toLowerCase();
+        const emailUser = await getUserByEmail(normalizedEmail);
         if (emailUser) {
           await linkWallet(emailUser.id, walletAddress);
+
+          let userDid = emailUser.did;
+          // Upgrade / resolve pending DID from bulk-onboarding
+          if (!userDid || userDid.startsWith("did:shield:user:pending-")) {
+            userDid = `did:shield:${emailUser.id}`;
+            await db
+              .update(users)
+              .set({
+                did: userDid,
+                name: name.trim() || emailUser.name,
+                updatedAt: new Date(),
+              })
+              .where(eq(users.id, emailUser.id));
+            emailUser.did = userDid;
+            emailUser.name = name.trim() || emailUser.name;
+          } else if (name && name.trim() && name.trim() !== emailUser.name) {
+            await db
+              .update(users)
+              .set({ name: name.trim(), updatedAt: new Date() })
+              .where(eq(users.id, emailUser.id));
+            emailUser.name = name.trim();
+          }
+
           const event = await createAuditEvent({
             actorId: emailUser.id,
             eventType: "USER_WALLET_LINKED",
             resourceType: "user",
             resourceId: emailUser.id,
-            description: `Wallet ${walletAddress} linked to existing account`,
+            description: `Sovereign Algorand wallet ${walletAddress} bound to pre-provisioned account (${normalizedEmail})`,
           });
           // Anchor wallet-link event on-chain (non-blocking)
-          anchorIdentityInBackground(emailUser.did ?? "", walletAddress, emailUser.id, event.id);
+          anchorIdentityInBackground(userDid ?? "", walletAddress, emailUser.id, event.id);
           return emailUser;
         }
 

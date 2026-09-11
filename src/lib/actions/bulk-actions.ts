@@ -18,10 +18,6 @@ import { computeCanonicalSha256 } from "@/lib/crypto/canonicalize";
 export interface BulkMemberRow {
   name: string;
   email: string;
-  role?: "OWNER" | "ADMIN" | "MANAGER" | "AUDITOR" | "USER";
-  clearanceLevel?: "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "SECRET" | "TOP_SECRET";
-  designation?: string;
-  employeeId?: string;
 }
 
 export interface BulkOnboardResult {
@@ -92,7 +88,6 @@ export async function bulkOnboardDepartmentMembersAction(
     const row = rows[i];
     const email = row.email?.trim().toLowerCase();
     const name = row.name?.trim() || email.split("@")[0] || "Employee";
-    const role = row.role || "USER";
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       errors.push(`Row ${i + 1}: Invalid email address "${row.email}"`);
@@ -100,7 +95,7 @@ export async function bulkOnboardDepartmentMembersAction(
     }
 
     try {
-      // 1. Find or create user
+      // 1. Find or create user with pending DID and unbound wallet
       let user = await db.query.users.findFirst({
         where: eq(users.email, email),
       });
@@ -116,9 +111,11 @@ export async function bulkOnboardDepartmentMembersAction(
           })
           .returning();
         user = newUser;
+      } else if (!user.name || user.name === "Employee") {
+        await db.update(users).set({ name }).where(eq(users.id, user.id));
       }
 
-      // 2. Find or create membership
+      // 2. Find or create organization membership (default role USER)
       let membership = await db.query.organizationMemberships.findFirst({
         where: and(
           eq(organizationMemberships.organizationId, organizationId),
@@ -132,7 +129,7 @@ export async function bulkOnboardDepartmentMembersAction(
           .values({
             organizationId,
             userId: user.id,
-            role,
+            role: "USER",
             status: "ACTIVE",
             joinedAt: new Date(),
           })
@@ -143,7 +140,6 @@ export async function bulkOnboardDepartmentMembersAction(
         await db
           .update(organizationMemberships)
           .set({
-            role,
             status: "ACTIVE",
             updatedAt: new Date(),
           })
@@ -169,35 +165,6 @@ export async function bulkOnboardDepartmentMembersAction(
           departmentId: dept.id,
         });
       }
-
-      // 4. Issue W3C Clearance Credential if clearanceLevel provided
-      if (row.clearanceLevel) {
-        const claims = {
-          id: user.did || `did:shield:user:${user.id}`,
-          employeeId: row.employeeId || `EMP-${randomUUID().slice(0, 8).toUpperCase()}`,
-          name: user.name,
-          email: user.email,
-          organization: dept.name,
-          clearanceLevel: row.clearanceLevel,
-          designation: row.designation || "Staff",
-        };
-
-        const canonicalHash = computeCanonicalSha256(claims);
-        const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
-
-        await db.insert(credentials).values({
-          type: "ROLE_ASSIGNMENT",
-          issuerDid: `did:shield:org:${organizationId}`,
-          subjectDid: user.did || `did:shield:user:${user.id}`,
-          organizationId,
-          issuedById: session.user.id,
-          claims: JSON.stringify(claims),
-          credentialHash: canonicalHash,
-          status: "ACTIVE",
-          issuedAt: new Date(),
-          expiresAt,
-        });
-      }
     } catch (err: any) {
       errors.push(`Row ${i + 1} (${email}): ${err.message}`);
     }
@@ -208,10 +175,10 @@ export async function bulkOnboardDepartmentMembersAction(
     await db.insert(auditEvents).values({
       organizationId,
       actorId: session.user.id,
-      eventType: "ROLE_ASSIGNED",
+      eventType: "MEMBER_JOINED",
       resourceType: "department",
       resourceId: dept.id,
-      description: `Bulk onboarded ${addedCount} new and updated ${updatedCount} members into department "${dept.name}" (Pending Wallet Binding).`,
+      description: `Bulk onboarded ${addedCount} new accounts and updated ${updatedCount} existing members into department "${dept.name}" (Pending Wallet Binding).`,
       metadata: JSON.stringify({
         departmentId: dept.id,
         departmentName: dept.name,
